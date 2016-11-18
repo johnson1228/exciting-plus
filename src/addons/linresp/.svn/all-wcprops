@@ -1,0 +1,83 @@
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/!svn/ver/1812/trunk/src/addons/linresp
+END
+genchi0wan.f90
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/1079/trunk/src/addons/linresp/genchi0wan.f90
+END
+bsfxc.f90
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/1779/trunk/src/addons/linresp/bsfxc.f90
+END
+write_response_f_header.f90
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/!svn/ver/1810/trunk/src/addons/linresp/write_response_f_header.f90
+END
+printwanntrans.f90
+K 25
+svn:wc:ra_dav:version-url
+V 62
+/svn/!svn/ver/1079/trunk/src/addons/linresp/printwanntrans.f90
+END
+gen_w_mesh.f90
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/1779/trunk/src/addons/linresp/gen_w_mesh.f90
+END
+mod_linresp.f90
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/1812/trunk/src/addons/linresp/mod_linresp.f90
+END
+solve_chi.f90
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/1779/trunk/src/addons/linresp/solve_chi.f90
+END
+genchi.f90
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/!svn/ver/1809/trunk/src/addons/linresp/genchi.f90
+END
+write_response_f.f90
+K 25
+svn:wc:ra_dav:version-url
+V 64
+/svn/!svn/ver/1807/trunk/src/addons/linresp/write_response_f.f90
+END
+genchi0.f90
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/1805/trunk/src/addons/linresp/genchi0.f90
+END
+genchi0wan_k.f90
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/!svn/ver/1528/trunk/src/addons/linresp/genchi0wan_k.f90
+END
+solve_chi_wan.f90
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/!svn/ver/1079/trunk/src/addons/linresp/solve_chi_wan.f90
+END
+svdchi0.f90
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/1079/trunk/src/addons/linresp/svdchi0.f90
+END

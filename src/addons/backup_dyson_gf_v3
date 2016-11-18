@@ -1,0 +1,242 @@
+subroutine dyson_gf(iter,bndrg,gf0,sigc,sigx,gf)
+use modmain
+use mod_linresp
+use mod_addons_q
+use mod_nrkp
+
+implicit none
+integer,intent(in) :: iter
+integer,intent(in) :: bndrg(2,nspinor)
+complex(8),intent(in) :: gf0(nstsv,lr_nw,nkptnrloc)
+complex(8),intent(in) :: sigc(nbnd,nspinor,lr_nw,nkptnrloc,2)
+real(8),intent(in) :: sigx(nbnd,nspinor,nkptnrloc,2)
+complex(8), intent(out) :: gf(nstsv,lr_nw,nkptnrloc)
+! local
+integer :: iw1,iw2,iw3,iwp,iwr,ist,ikloc,info,i
+complex(8) :: gtmp,ctmp,ztmp
+! begin test
+complex(8) :: gf0_aux(nbnd,lr_nw,nkptnrloc),gf_aux(nbnd,lr_nw,nkptnrloc)
+complex(8) :: gf0_w(nbnd,niw,nkptnrloc),gf_w(nbnd,niw,nkptnrloc)
+complex(8) :: sigc_w(nbnd,niw,nkptnrloc)
+complex(8) :: sigc1(nbnd,lr_nw,nkptnrloc)
+complex(8) :: a1,a2,a3
+complex(8),allocatable :: amat(:,:),zmat(:,:),bmat(:)
+integer,allocatable :: ipiv(:)
+real(8) :: dw(lr_nw)
+integer :: iwmap(lr_nw,lr_nw)
+real(8) :: d12(2,lr_nw,lr_nw)
+integer :: iw,ik,isp1,ibnd,fbnd
+character*100 :: fname,fname_tot,fspn
+complex(8),external :: expola_tau
+integer,external :: findiw
+!end test
+
+! Here, Hartree potential change is not considered yet
+!
+! assume the green function is diagonal at this moment
+! beyond qpnb(1) and qpnb(2), Green's function is not updated
+allocate(amat(lr_nw,lr_nw))
+allocate(zmat(lr_nw,lr_nw))
+allocate(bmat(lr_nw))
+allocate(ipiv(lr_nw))
+amat=zzero
+zmat=zzero
+bmat=zzero
+iwmap=0
+ipiv=0
+
+! first calculate dw^{r}
+dw(1)=dreal(lr_w(2)-lr_w(1))
+dw(lr_nw)=dreal(lr_w(lr_nw)-lr_w(lr_nw-1))
+
+do iw1=2,lr_nw-1
+ dw(iw1)=dreal(lr_w(iw1+1)-lr_w(iw1-1))
+enddo
+dw(:)=dw(:)*0.5d0
+
+! mapping between iw and iw1-iw2
+call findiw_new(iwmap,d12)
+gf(:,:,:)=gf0(:,:,:)
+
+do ikloc=1,nkptnrloc
+ do isp1=1,nspinor
+  ibnd=bndrg(1,isp1)
+  fbnd=bndrg(2,isp1)
+  do ist=ibnd,fbnd
+   i=ist-ibnd+1
+   zmat=zzero
+
+   do iw2=1,lr_nw
+    do iw1=1,lr_nw
+     ! correlation aprt
+     do iw3=1,lr_nw
+       iwp=iwmap(iw1,iw3)
+       iwr=iwmap(iw3,iw2)
+       gtmp=gf0(ist,iwp,ikloc)*d12(1,iw1,iw3)+gf0(ist,iwp+1,ikloc)*d12(2,iw1,iw3)
+       gtmp=gtmp/dreal(lr_w(iwp+1)-lr_w(iwp))
+       ctmp=(sigc(i,isp1,iwr,ikloc,1)-sigc(i,isp1,iwr,ikloc,2))*d12(1,iw3,iw2)+&
+           &(sigc(i,isp1,iwr+1,ikloc,1)-sigc(i,isp1,iwr+1,ikloc,2))*d12(2,iw3,iw2)
+       ctmp=ctmp/dreal(lr_w(iwr+1)-lr_w(iwr))
+       ztmp=gtmp*ctmp
+       ! gf0 and sigc are odd functions (Fermion-like)
+       if ((iw1.lt.iw3).and.(iw3.gt.iw2)) ztmp=-1.d0*ztmp
+       if ((iw1.gt.iw3).and.(iw3.lt.iw2)) ztmp=-1.d0*ztmp
+       zmat(iw1,iw2)=zmat(iw1,iw2)+ztmp*dw(iw3)
+     enddo !iw3
+
+     if (mpi_grid_root().and.ist.eq.4) then
+       write(*,*) "iw1,iw2,zmat:",iw1,iw2,zmat(iw1,iw2)
+     endif
+
+     ! exchange part
+     iwp=iwmap(iw1,iw2)
+     ztmp=gf0(ist,iwp,ikloc)*d12(1,iw1,iw2)+gf0(ist,iwp+1,ikloc)*d12(2,iw1,iw2)
+     ztmp=ztmp*(sigx(i,isp1,ikloc,1)-sigx(i,isp1,ikloc,2))/dreal(lr_w(iwp+1)-lr_w(iwp))
+     if (iw1.lt.iw2) ztmp=-1.d0*ztmp
+     zmat(iw1,iw2)=zmat(iw1,iw2)+ztmp
+     amat(iw1,iw2)=-dw(iw2)*zmat(iw1,iw2)
+     if (iw1.eq.iw2) amat(iw1,iw2)=amat(iw1,iw2)+zone
+    enddo ! iw1
+   enddo !iw2
+
+   bmat(:)=gf0(ist,:,ikloc)
+! solve for dressed Green function
+   call zgesv(lr_nw,1,amat(1,1),lr_nw,ipiv,bmat(1),lr_nw,info)
+   if (info.ne.0) write(*,*) "info.ne.0!",info
+   gf(ist,:,ikloc)=bmat(:)
+  enddo !ist
+ enddo !isp1
+enddo !ikloc
+
+! gf
+if (mpi_grid_root((/dim_q/))) then
+ do ikloc=1,nkptnrloc
+  ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
+  write(fname,'("gf_tau_I",I1.1,"_k",I4.4)') iter,ik
+  do ist=qpnb(1),qpnb(2)
+   write(fspn,'("_ist",I3.3)') ist
+   fname_tot=trim(adjustl(fname))//trim(adjustl(fspn))
+   open(168,file=fname_tot,action='write',form="FORMATTED",status="REPLACE")
+   do iw=1,lr_nw
+     write(168,'(3G18.8)') dreal(lr_w(iw))/ha2ev,dreal(gf(ist,iw,ikloc)),&
+                         &dimag(gf(ist,iw,ikloc))
+   enddo
+   close(168)
+  enddo !ist
+ enddo !ikloc
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!
+! begin test
+do ist=qpnb(1),qpnb(2)
+ i=ist-qpnb(1)+1
+ gf_aux(i,:,:)=gf(ist,:,:)
+enddo
+
+!G(iw)
+call ft_tw3(1,-1,nbnd,lr_nw,nkptnrloc,niw,gf_aux(:,:,:),gf_w)
+
+! gf_w
+if (mpi_grid_root((/dim_q/))) then
+ do ikloc=1,nkptnrloc
+  ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
+  write(fname,'("gf_iw1_I",I1.1,"_k",I4.4)') iter,ik
+  do ist=qpnb(1),qpnb(2)
+   i=ist-qpnb(1)+1
+   write(fspn,'("_ist",I3.3)') ist
+   fname_tot=trim(adjustl(fname))//trim(adjustl(fspn))
+   open(168,file=fname_tot,action='write',form="FORMATTED",status="REPLACE")
+   do iw=1,niw
+     write(168,'(3G18.8)') iw,dreal(gf_w(i,iw,ikloc)),&
+                         &dimag(gf_w(i,iw,ikloc))
+   enddo
+   close(168)
+  enddo !ist
+ enddo !ikloc
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! begin test2
+!gf(:,:,:)=gf0(:,:,:)
+
+do isp1=1,nspinor
+ ibnd=bndrg(1,isp1)
+ fbnd=bndrg(2,isp1)
+
+ do ist=ibnd,fbnd
+  i=ist-ibnd+1
+  gf0_aux(i,:,:)=gf0(ist,:,:)
+ enddo
+
+ call ft_tw3(1,-1,nbnd,lr_nw,nkptnrloc,niw,gf0_aux(:,:,:),&
+          &gf0_w)
+
+ gf_w(:,:,:)=gf0_w(:,:,:)
+ sigc1(:,:,:)=sigc(:,isp1,:,:,1)-sigc(:,isp1,:,:,2)
+ call ft_tw3(1,-1,nbnd,lr_nw,nkptnrloc,niw,sigc1(:,:,:),&
+          &sigc_w)
+
+ do ikloc=1,nkptnrloc
+  do iw=1,niw
+   do i=1,nbnd
+    ctmp=zone-gf0_w(i,iw,ikloc)*(sigc_w(i,iw,ikloc)+&
+        &sigx(i,isp1,ikloc,1)-sigx(i,isp1,ikloc,2))
+    if (mpi_grid_root().and.(i.eq.nbnd)) then
+     write(*,*) "iw,ctmp:",iw,ctmp
+    endif
+    gf_w(i,iw,ikloc)=gf_w(i,iw,ikloc)/ctmp
+   enddo !i
+  enddo !iw
+ enddo !ikloc
+
+enddo !isp1
+
+! gf_w
+if (mpi_grid_root((/dim_q/))) then
+ do ikloc=1,nkptnrloc
+  ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
+  write(fname,'("gf_iw2_I",I1.1,"_k",I4.4)') iter,ik
+  do ist=qpnb(1),qpnb(2)
+   i=ist-qpnb(1)+1
+   write(fspn,'("_ist",I3.3)') ist
+   fname_tot=trim(adjustl(fname))//trim(adjustl(fspn))
+   open(168,file=fname_tot,action='write',form="FORMATTED",status="REPLACE")
+   do iw=1,niw
+     write(168,'(3G18.8)') iw,dreal(gf_w(i,iw,ikloc)),&
+                         &dimag(gf_w(i,iw,ikloc))
+   enddo
+   close(168)
+  enddo !ist
+ enddo !ikloc
+endif
+
+! end test
+
+deallocate(amat,zmat,bmat,ipiv)
+return
+end subroutine
+
+complex(8) function expola_tau(x0,x1,x2,x3,f1,f2,f3)
+use modmain
+use mod_linresp
+!
+implicit none
+complex(8),intent(in) :: x0
+complex(8),intent(in) :: x1
+complex(8),intent(in) :: x2
+complex(8),intent(in) :: x3
+complex(8),intent(in) :: f1
+complex(8),intent(in) :: f2
+complex(8),intent(in) :: f3
+!
+complex(8) :: a1,a2,a3
+
+a1=(f3-f2)/(x3-x2)-(f2-f1)/(x2-x1)
+a1=a1/(x3-x1)
+a2=(f3-f2)/(x3-x2)-a1*(x3+x2)
+a3=f3-a1*x3**2-a2*x3
+
+expola_tau=a1*x0**2+a2*x0+a3
+
+return
+end function expola_tau

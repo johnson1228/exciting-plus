@@ -1,0 +1,143 @@
+subroutine pade_ac_sc(n1,n2,n3,nk,sigc,sigcr)
+use modmain
+use mod_linresp
+use mod_addons_q
+use mod_nrkp
+use mod_expigqr
+implicit none
+!
+integer,intent(in) :: n1
+integer,intent(in) :: n2
+integer,intent(in) :: n3
+integer,intent(in) :: nk
+complex(8),intent(in) :: sigc(n1,n2,n3,nk)
+complex(8),intent(out) :: sigcr(2,n1,n2,nk)
+!
+integer :: iw1,iw2,ist1,isp1,ikloc,n,ik
+complex(8),allocatable :: gn(:,:),ctmp(:,:,:,:)
+complex(8),allocatable :: sigcoe(:,:,:,:)
+complex(8) :: enk,dSe,wn(n3)
+!test
+integer :: i
+!complex(8),allocatable :: tmp1(:,:,:,:)
+!character*100 :: fname,fspn,fname_tot
+complex(8),external :: ac_func
+!
+allocate(gn(n3,n3))
+allocate(sigcoe(n3,n1,n2,nk))
+allocate(ctmp(n3,n1,n2,nk))
+!
+!test
+!allocate(tmp1(n4,n1,n2,n3))
+
+sigcoe=zzero
+sigcr=zzero
+gn=zzero
+ctmp=zzero
+wn=zzero
+!tmp1=zzero
+
+!change order of indices
+do ikloc=1,nkptnrloc
+ do iw1=1,n3
+  ctmp(iw1,:,:,ikloc)=sigc(:,:,iw1,ikloc)
+ enddo
+enddo
+
+! iw mesh
+n=0
+do iw1=-int((n3-1)/2),int(n3/2)
+ n=n+1
+ wn(n)=zi*(2.d0*iw1+1)*pi/bhbar
+enddo
+
+do ikloc=1,nk
+ do isp1=1,n2
+  do ist1=1,n1
+   do iw1=1,n3
+    do iw2=iw1,n3
+     if (iw1.eq.1) then
+      gn(1,iw2)=ctmp(iw2,ist1,isp1,ikloc)
+     else
+      gn(iw1,iw2)=(gn(iw1-1,iw1-1)-gn(iw1-1,iw2))/&
+               &(wn(iw2)-wn(iw1-1))/gn(iw1-1,iw2)
+     endif
+    enddo !iw2
+! gn(i,i) are the coefficients of the fitted self-energy
+    sigcoe(iw1,ist1,isp1,ikloc)=gn(iw1,iw1)
+   enddo !iw1
+  enddo !ist1
+ enddo !ist2
+enddo !ikloc
+
+do ikloc=1,nk
+ ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
+ do isp1=1,n2
+  do ist1=1,n1
+   do iw1=1,2
+    enk=dcmplx(evalsvnr(qpnb(1)+ist1-1,ik)+(iw1-1)*del_e,lr_eta)
+    sigcr(iw1,ist1,isp1,ikloc)=ac_func(n3,sigcoe(:,ist1,isp1,ikloc),wn,enk)
+   enddo
+  enddo
+ enddo
+enddo
+
+!test
+!do ikloc=1,n3
+! do isp1=1,n2
+!  do ist1=1,n1
+!   do iw1=1,n4
+!    enk=wn(iw1)
+!    tmp1(iw1,ist1,isp1,ikloc)=ac_func(n4,sigcoe(:,ist1,isp1,ikloc),wn,enk)
+!   enddo
+!  enddo
+! enddo
+!enddo
+
+! do ikloc=1,n3
+!  ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
+!  write(fname,'("sigc_iw2_k",I4.4)') ik
+!  do ist1=qpnb(1),qpnb(2)
+!   write(fspn,'("_ist",I3.3)') ist1
+!   fname_tot=trim(adjustl(fname))//trim(adjustl(fspn))
+!   open(168,file=fname_tot,action='write',form="FORMATTED",status="REPLACE")
+!   i=ist1-qpnb(1)+1
+!   do iw1=1,n4
+!    write(168,'(3G18.8)') iw1,dreal(tmp1(iw1,i,1,ikloc))*ha2ev,&
+!          & dimag(tmp1(iw1,i,1,ikloc))*ha2ev
+!   enddo
+!   close(168)
+!  enddo !ist1
+! enddo !ikloc
+
+deallocate(gn,ctmp,sigcoe)
+!deallocate(tmp1)
+return
+end subroutine
+
+complex(8) function ac_func(n,coe,wn,z)
+use modmain
+use mod_linresp
+!
+implicit none
+!
+integer,intent(in) :: n
+complex(8),intent(in) :: coe(n)
+complex(8),intent(in) :: wn(n)
+complex(8),intent(in) :: z
+!
+integer :: i
+complex(8) :: tmp1,tmp2
+!
+!b=zzero
+tmp1=zzero
+
+do i=1,n-1
+ tmp2=coe(n-i+1)*(z-wn(n-i))/(zone+tmp1)
+ tmp1=tmp2
+enddo
+
+ac_func=coe(1)/(zone+tmp1)
+
+return
+end function

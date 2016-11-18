@@ -1,0 +1,191 @@
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/1871/trunk/src/addons/sic
+END
+gensmesh_healpix.f90
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/!svn/ver/1739/trunk/src/addons/sic/gensmesh_healpix.f90
+END
+rndumtrx.f90
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/1833/trunk/src/addons/sic/rndumtrx.f90
+END
+sic_test_vme.f90
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/1745/trunk/src/addons/sic/sic_test_vme.f90
+END
+sic_write_blochsum.f90
+K 25
+svn:wc:ra_dav:version-url
+V 62
+/svn/!svn/ver/1740/trunk/src/addons/sic/sic_write_blochsum.f90
+END
+sic_genpot.f90
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/!svn/ver/1851/trunk/src/addons/sic/sic_genpot.f90
+END
+sic_write_eval.f90
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/1740/trunk/src/addons/sic/sic_write_eval.f90
+END
+sic_genvme_dotp.f90
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/1852/trunk/src/addons/sic/sic_genvme_dotp.f90
+END
+sic_wan_pot.f90
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/1871/trunk/src/addons/sic/sic_wan_pot.f90
+END
+sic_genwanlm.f90
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/1855/trunk/src/addons/sic/sic_genwanlm.f90
+END
+sic_hunif.f90
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/1795/trunk/src/addons/sic/sic_hunif.f90
+END
+gensmesh_cubed.f90
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/1856/trunk/src/addons/sic/gensmesh_cubed.f90
+END
+sic_exp_grad_u.f90
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/1838/trunk/src/addons/sic/sic_exp_grad_u.f90
+END
+mod_sic.f90
+K 25
+svn:wc:ra_dav:version-url
+V 51
+/svn/!svn/ver/1842/trunk/src/addons/sic/mod_sic.f90
+END
+sic_main.f90
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/1857/trunk/src/addons/sic/sic_main.f90
+END
+sic_ekin.f90
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/1739/trunk/src/addons/sic/sic_ekin.f90
+END
+gensmesh_icos.f90
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/1685/trunk/src/addons/sic/gensmesh_icos.f90
+END
+sic_localize.f90
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/1741/trunk/src/addons/sic/sic_localize.f90
+END
+sic_init.f90
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/1870/trunk/src/addons/sic/sic_init.f90
+END
+sic_read_data.f90
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/1740/trunk/src/addons/sic/sic_read_data.f90
+END
+gensmesh_lebededv.f90
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/!svn/ver/1739/trunk/src/addons/sic/gensmesh_lebededv.f90
+END
+sic_genblochsum.f90
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/1821/trunk/src/addons/sic/sic_genblochsum.f90
+END
+sic_genrmesh.f90
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/1502/trunk/src/addons/sic/sic_genrmesh.f90
+END
+sic_create_hdf5.f90
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/1740/trunk/src/addons/sic/sic_create_hdf5.f90
+END
+sic_gensmesh.f90
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/1472/trunk/src/addons/sic/sic_gensmesh.f90
+END
+sic_gndstate.f90
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/1414/trunk/src/addons/sic/sic_gndstate.f90
+END
+gensmesh_gauss.f90
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/1685/trunk/src/addons/sic/gensmesh_gauss.f90
+END
+sic_genpot_s.f90
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/1748/trunk/src/addons/sic/sic_genpot_s.f90
+END
+sic_update_umtrx.f90
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/!svn/ver/1472/trunk/src/addons/sic/sic_update_umtrx.f90
+END
+sic_genvme.f90
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/!svn/ver/1859/trunk/src/addons/sic/sic_genvme.f90
+END
+sic_hunif_fd.f90
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/1860/trunk/src/addons/sic/sic_hunif_fd.f90
+END
+sic_write_data.f90
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/1739/trunk/src/addons/sic/sic_write_data.f90
+END

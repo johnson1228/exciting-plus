@@ -1,0 +1,274 @@
+subroutine psolve_wtau(iq,nw0,pol0,svq0)
+use modmain
+use mod_linresp
+use mod_addons_q
+use mod_nrkp
+use mod_expigqr
+implicit none
+!
+integer,intent(in) :: iq
+integer,intent(in) :: nw0
+complex(8),intent(in) :: pol0(ngq(iq),ngq(iq),nw0)
+complex(8),intent(out) :: svq0(ngq(iq),ngq(iq),nw0)
+!
+! local variable
+integer :: nxprocs,nyprocs,nxprocs_0,nyprocs_0
+integer :: ictxt, my_row, my_col
+integer :: mb, nb, m, n, mpdim, npdim, nbdim, mblock,nblock
+integer :: mp, np, mc, mr, igloc, jgloc,indx, iloc,jloc
+integer :: ig1,ig2,ierr,info,tmp1,iw,iw1,iw2,i,j
+! scalapack dimensions
+integer,parameter :: IDESCLEN_=9
+! descriptors a and b
+integer :: idesca(IDESCLEN_), idescb(IDESCLEN_)
+#ifdef _MPI_
+!integer istat(MPI_STATUS_SIZE)
+#endif
+complex(8),allocatable :: krnl(:,:,:),aux(:,:,:)
+complex(8),allocatable :: aloc(:),bloc(:)
+integer,allocatable :: ipiv(:),tmp2(:)
+complex*16,allocatable :: work1(:)
+real(8) :: dw(nw0)
+integer,external :: NUMROC,findiw
+!external :: PZLAPRNT_1
+!
+allocate(krnl(ngq(iq),ngq(iq),2))
+allocate(aux(ngq(iq),ngq(iq),nw0))
+krnl=zzero
+aux=zzero
+svq0=zzero
+
+! amat: m x m ;   bmat: m x n
+m=ngq(iq)*nw0
+n=ngq(iq)
+! desired block size of block-cyclic
+mb=32
+nb=32
+! process row and column
+if (nproc.gt.1) then
+ do i=1,int(sqrt(dble(nproc)))
+  if (mod(nproc,i).eq.0) tmp1=i
+ enddo
+ nxprocs=nproc/tmp1
+ nyprocs=tmp1
+else
+ nxprocs=mpi_grid_dim_size(dim_k)
+ nyprocs=mpi_grid_dim_size(dim_q)
+endif
+! 
+ictxt=0
+call sl_init(ictxt,nxprocs,nyprocs)
+call blacs_gridinfo(ictxt,nxprocs_0,nyprocs_0,my_row,my_col)
+
+if (mpi_grid_root()) then
+ write(*,*) "nxprocs,nyprocs,nproc:",nxprocs,nyprocs,nproc
+endif
+
+! create the scalapack array descriptors for 2d-block-cyclic
+! (1) for m x m amat
+tmp1=int(m/nxprocs)
+if (mod(m,nxprocs).ne.0) tmp1=tmp1+1
+mblock=max(1,min(tmp1,mb))
+
+tmp1=int(m/nyprocs)
+if (mod(m,nyprocs).ne.0) tmp1=tmp1+1
+nblock=max(1,min(tmp1,mb))
+
+mpdim=NUMROC(m,mblock,my_row,0,nxprocs)
+npdim=NUMROC(m,nblock,my_col,0,nyprocs)
+
+call DESCINIT(idesca,m,m,mblock,nblock,0,0,ictxt,mpdim,info)
+
+write(*,*) "mpdim,npdim,info:",mpdim,npdim,info,my_row,my_col
+
+if (mpi_grid_root()) then
+ write(151,*) "m,n:",m,n
+ call flushifc(151)
+endif
+
+! (2) for nrhs of bmat
+tmp1=int(n/nyprocs)
+if (mod(n,nyprocs).ne.0) tmp1=tmp1+1
+nblock=max(1,min(tmp1,nb))
+nbdim=NUMROC(n,nblock,my_col,0,nyprocs)
+
+call DESCINIT(idescb,m,n,mblock,nblock,0,0,ictxt,mpdim,info)
+
+! now allocate local matrices
+allocate(aloc(mpdim*npdim))
+allocate(bloc(mpdim*nbdim))
+allocate(ipiv(mpdim+mblock)) ! swap-info from pivoting
+allocate(work1(10*mpdim+10*mblock))
+allocate(tmp2(ngq(iq)*nw0))
+aloc=zzero
+bloc=zzero
+ipiv=0
+tmp2=0
+work1=zzero
+
+if (mpi_grid_root()) then
+ call timestamp(151)
+ write(151,*) "before aux and svq0!"
+ call flushifc(151)
+endif
+
+
+! v(q)=4\pi/|q|^2
+do ig1=1,ngq(iq)
+  krnl(ig1,ig1,1)=dcmplx(vhgq(ig1,iq))
+! different weight at Gamma
+  krnl(ig1,ig1,2)=dcmplx(wtvhgq(ig1,iq))
+enddo
+
+! vP(tau)=aux
+do iw=1,nw0
+ call zgemm('N','N',ngq(iq),ngq(iq),ngq(iq),zone,krnl(1,1,1),&
+             & ngq(iq),pol0(1,1,iw),ngq(iq),zzero,aux(1,1,iw),ngq(iq))
+ call zgemm('N','N',ngq(iq),ngq(iq),ngq(iq),zone,aux(1,1,iw),&
+             & ngq(iq),krnl(1,1,2),ngq(iq),zzero,svq0(1,1,iw),ngq(iq))
+enddo
+
+if (mpi_grid_root()) then
+ call timestamp(151)
+ write(151,*) "before aloc!"
+ call flushifc(151)
+endif
+
+! now assign aloc!  igloc=(ig,iw)
+mblock=idesca(5)
+nblock=idesca(6)
+
+! first calculate dw^{r}
+dw(1)=dreal(lr_w(2)-lr_w(1))
+dw(nw0)=dreal(lr_w(nw0)-lr_w(nw0-1))
+
+do iw1=2,nw0-1
+ dw(iw1)=dreal(lr_w(iw1+1)-lr_w(iw1-1))
+enddo
+dw(:)=dw(:)*0.5d0
+
+! calculate tmp2
+do igloc=1,m
+ tmp2(igloc)=(igloc-1)/(mblock*nxprocs)
+enddo
+
+do jgloc=1,m
+ mc=mod((jgloc-1)/nblock,nyprocs)
+ if (mc.ne.my_col) cycle
+
+ ig2=mod(jgloc-1,ngq(iq))+1
+ iw2=(jgloc-1)/ngq(iq)+1
+ tmp1=(jgloc-1)/(nblock*nyprocs)
+ jloc=tmp1*nblock+mod((jgloc-1),nblock)+1
+ do igloc=1,m
+  mr=mod((igloc-1)/mblock,nxprocs)
+  if (mr.ne.my_row) cycle
+
+  ig1=mod(igloc-1,ngq(iq))+1
+  iw1=(igloc-1)/ngq(iq)+1
+!  tmp1=(igloc-1)/(mblock*nxprocs)
+!  iloc=tmp1*mblock+mod(igloc-1,mblock)+1
+  iloc=tmp2(igloc)*mblock+mod(igloc-1,mblock)+1
+  indx=iloc+(jloc-1)*mpdim  ! need check
+  iw=findiw(iw1,iw2)
+!  if (ig1.eq.1.and.ig2.eq.1.and.mpi_grid_root()) write(*,*) "iw,iw1,iw2:",iw,iw1,iw2
+  if (iw.lt.0) then
+    write(*,*) "iw .ne. 0!"
+    write(*,*) "iw1,iw2,igloc,jgloc:",iw1,iw2,igloc,jgloc
+  endif
+  aloc(indx)=-aux(ig1,ig2,iw)*dw(iw2)
+  if (ig1.eq.ig2.and.iw1.eq.iw2) aloc(indx)=aloc(indx)+zone
+ enddo
+enddo
+
+if (mpi_grid_root()) then
+ call timestamp(151)
+ write(151,*) "before bloc!"
+ call flushifc(151)
+endif
+
+!bloc
+mblock=idescb(5)
+nblock=idescb(6)
+
+do jgloc=1,n
+ mc=mod((jgloc-1)/nblock,nyprocs)
+ if (mc.ne.my_col) cycle
+
+ tmp1=(jgloc-1)/(nblock*nyprocs)
+ jloc=tmp1*nblock+mod((jgloc-1),nblock)+1
+ do igloc=1,m
+  mr=mod((igloc-1)/mblock,nxprocs)
+  if (mr.ne.my_row) cycle
+
+  ig1=mod(igloc-1,ngq(iq))+1
+  iw1=(igloc-1)/ngq(iq)+1
+  tmp1=(igloc-1)/(mblock*nxprocs)
+  iloc=tmp1*mblock+mod(igloc-1,mblock)+1
+  indx=iloc+(jloc-1)*mpdim  ! need check
+  bloc(indx)=svq0(ig1,jgloc,iw1)
+ enddo
+enddo
+
+if (mpi_grid_root()) then
+ call timestamp(151)
+ write(151,*) "before mpi_barrier!"
+ call flushifc(151)
+endif
+
+call mpi_grid_barrier((/dim_k,dim_q/))
+
+if (mpi_grid_root()) then
+ call timestamp(151)
+ write(151,*) "before pzgesv!"
+ call flushifc(151)
+endif
+
+! solve the linear equation using pzgesv
+call PZGESV(m,n,aloc,1,1,idesca,ipiv,bloc,1,1,idescb,info)
+if (info.ne.0) write(*,*) "info.ne.0:",info
+
+if (mpi_grid_root()) then
+ call timestamp(151)
+ write(151,*) "after pzgesv!"
+ call flushifc(151)
+endif
+
+! store solution in svq0
+svq0=zzero
+mblock=idescb(5)
+nblock=idescb(6)
+
+do jloc=1,nbdim
+  tmp1=(jloc-1)/nblock
+  jgloc=tmp1*nblock*nyprocs+my_col*nblock+mod(jloc-1,nblock)+1
+  if (jgloc.gt.n) cycle
+  do iloc=1,mpdim
+   tmp1=(iloc-1)/mblock
+   igloc=tmp1*mblock*nxprocs+my_row*mblock+mod(iloc-1,mblock)+1
+   if (igloc.gt.m) cycle
+   indx=iloc+(jloc-1)*mpdim
+   ig1=mod(igloc-1,ngq(iq))+1
+   iw=(igloc-1)/ngq(iq)+1
+   svq0(ig1,jgloc,iw)=bloc(indx)
+  enddo
+enddo
+
+call mpi_grid_reduce(svq0(1,1,1),ngq(iq)*ngq(iq)*nw0,dims=(/dim_k,dim_q/), &
+                     & all=.true.)
+
+!testing
+!if (iq.eq.2) then
+! call PZLAPRNT_1(m,n,bloc,1,1,idescb,0,0,'X',6,work1)
+!endif
+
+if (mpi_grid_root()) then
+ call timestamp(151)
+ write(151,*) "after pzlaprnt!"
+ call flushifc(151)
+endif
+
+deallocate(krnl,aux,ipiv,aloc,bloc)
+deallocate(work1,tmp2)
+return
+end subroutine

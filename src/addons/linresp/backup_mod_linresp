@@ -1,0 +1,462 @@
+module mod_linresp
+implicit none
+
+! dimension for q-vectors
+integer, parameter :: dim_q=2
+
+! type of linear response calculation
+!   0 : charge response
+!   1 : magnetic response (not yet implemented)
+integer lrtype
+data lrtype/0/
+
+! temporary array used in genchi0blh
+complex(8), allocatable :: megqblh2(:,:)
+
+! interval of bands to include in chi0
+real(8) chi0_include_bands(2)
+data chi0_include_bands/-100.1d0,100.1d0/
+
+! interval of bands to exclude from chi0
+real(8) chi0_exclude_bands(2)
+data chi0_exclude_bands/100.1d0,-100.1d0/
+
+complex(8), allocatable :: wann_cc(:,:,:)
+complex(8), allocatable :: wann_cc2(:,:)
+
+complex(8), allocatable :: chi0loc(:,:,:)
+complex(8), allocatable :: chi0wanloc(:,:,:)
+
+! number of energy-mesh points or Matsubara time grid points
+integer lr_nw
+data lr_nw/201/
+! number of energy-mesh points
+integer niw
+data niw/201/
+! first energy point (Ha)
+real(8) lr_w0
+data lr_w0/0.d0/
+! last energy point (Ha)
+real(8) lr_w1
+data lr_w1/1.d0/
+! energy step
+real(8) lr_dw
+! energy mesh
+complex(8), allocatable :: lr_w(:)
+! energy mesh for GW integral
+complex(8), allocatable :: lr_wc(:)
+! broadening parameter (Ha)
+real(8) lr_eta
+data lr_eta/0.01d0/
+! QP correction: 0 for G0W0, 1 for GW0 and 2 for GW
+integer gw_mode
+data gw_mode/0/
+! number of steps in GW0 calculation; 1 if G0W0 calculation
+integer gw0step
+data gw0step/1/
+! scGW number of iterations
+integer scgwni
+data scgwni/1/
+! QP correction to bands between qpnb(1) and qpnb(2)
+integer qpnb(2)
+! number of bands in self-energy matrix
+integer nbnd
+! number of empty bands used in chi
+integer nebd_chi
+! number of empty bands used in self-energy
+integer nebd_se
+! GW calculation type: 
+! 0: PPA  1:real-axis integration 2:full self-energy 3:imaginary axis
+integer caltype
+data caltype/0/
+! beta*hbar in \tau GW method
+real(8) bhbar
+data bhbar/1046.5846d0/    ! kT = 26 meV
+! uniform power mesh for GW method, upm(1)=p, upm(2)=u
+! defined in Stan et al. JCP 130,114105 (2009)
+integer upm(2)
+! energy step used in G0W0 calculation
+real(8) del_e
+data del_e/0.01d0/
+!restart flag in GW calculations
+logical gw_restart
+data gw_restart/.false./
+!flag for GW band
+logical gwband
+data gwband/.false./
+! spin index in GW band structure
+integer gwband_sp
+data gwband_sp/1/
+! do not update GW energy in writewann.f90
+logical eval_udt
+data eval_udt/.true./
+! core contribution to exx
+logical core_exx
+data core_exx/.true./
+! inverse temperature for the matsubara frequency in eV^-1
+real(8) lr_beta
+data lr_beta/30.d0/
+! .true. if imaginary frequency mesh is required
+logical timgw
+data timgw/.false./
+! first imaginary frequency
+real(8) lr_iw0
+data lr_iw0/0.d0/
+! last imaginary frequency
+real(8) lr_iw1
+data lr_iw1/80.d0/
+
+real(8) fxca0
+data fxca0/0.d0/
+real(8) fxca1
+data fxca1/0.d0/
+integer nfxca
+data nfxca/1/
+integer fxctype
+data fxctype/0/
+
+! high-level switch: compute chi0 and chi in Wannier functions basis
+logical wannier_chi0_chi 
+data wannier_chi0_chi/.false./
+! high-level switch: .true. if chi0 should be multiplied by 2
+logical wannier_chi0_afm
+data wannier_chi0_afm/.false./
+
+! indices of response functions in global array f_response(:,:,:)
+integer, parameter :: f_chi0                 = 1
+integer, parameter :: f_chi                  = 2
+integer, parameter :: f_chi_scalar           = 3
+integer, parameter :: f_chi_pseudo_scalar    = 4
+integer, parameter :: f_epsilon_matrix_GqGq  = 5
+integer, parameter :: f_epsilon_scalar_GqGq  = 6
+integer, parameter :: f_inv_epsilon_inv_GqGq = 7
+integer, parameter :: f_epsilon_eff          = 8
+integer, parameter :: f_epsilon_eff_scalar   = 9
+integer, parameter :: f_sigma                = 10
+integer, parameter :: f_sigma_scalar         = 11
+integer, parameter :: f_loss                 = 12
+integer, parameter :: f_loss_scalar          = 13
+integer, parameter :: f_chi0_wann            = 14
+integer, parameter :: f_chi_wann             = 15
+integer, parameter :: f_epsilon_eff_wann     = 16
+integer, parameter :: f_sigma_wann           = 17
+integer, parameter :: f_loss_wann            = 18
+integer, parameter :: f_epsilon_inv_GqGq     = 19
+
+integer, parameter :: nf_response            = 19
+complex(8), allocatable :: f_response(:,:,:)
+
+complex(8), allocatable :: u4(:,:,:,:)
+logical screenu4
+data screenu4/.true./
+
+complex(8), allocatable :: gw_self_energy(:,:,:,:)
+complex(8), allocatable :: self_energy_x(:,:)
+contains
+
+subroutine genchi0blh(ikloc,ngq,w,chi0w)
+use modmain
+use mod_nrkp
+use mod_expigqr
+implicit none
+! arguments
+integer, intent(in) :: ikloc
+integer, intent(in) :: ngq
+complex(8), intent(in) :: w
+complex(8), intent(out) :: chi0w(ngq,ngq)
+! local variables
+logical l1
+logical gw_flag,flag
+integer i,ist1,ist2,ik,jk,ig
+integer nst,itask
+real(8) t1,t2
+complex(8), allocatable :: wt(:)
+logical, external :: bndint
+! 
+ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
+jk=idxkq(1,ik)
+allocate(wt(nmegqblh(ikloc)))
+if (allocated(megqblh2)) deallocate(megqblh2)
+allocate(megqblh2(nstsv*nstsv,ngq))
+wt(:)=zzero
+
+! check if G0W0 calculation is performed
+do itask=1,ntasks
+ if (tasks(itask).eq.802) then
+  gw_flag=.true.
+  goto 222
+ endif
+enddo
+
+222 continue
+nst=(int(chgval/2.0)+nebd_chi)*nspinor
+nst=min(nst,nstsv)
+
+do i=1,nmegqblh(ikloc)
+  ist1=bmegqblh(1,i,ikloc)
+  ist2=bmegqblh(2,i,ikloc)
+
+  flag=(((ist1.gt.nst/nspinor).and.(ist1.le.nstsv/nspinor)).or. &
+        ((ist2.gt.nst/nspinor).and.(ist2.le.nstsv/nspinor)))
+  if (gw_flag.and.flag) cycle
+  flag=((ist1.gt.(nst/nspinor+nstsv/nspinor)).or. &
+        (ist2.gt.(nst/nspinor+nstsv/nspinor)))
+  if (gw_flag.and.flag) cycle
+
+! default : include all interband transitions         
+  l1=.true.
+! cRPA case : don't include bands in energy window [crpa_e1,crpa_e2]
+  if (bndint(ist1,evalsvnr(ist1,ik),chi0_exclude_bands(1),&
+      chi0_exclude_bands(2)).and.bndint(ist2,evalsvnr(ist2,jk),&
+      chi0_exclude_bands(1),chi0_exclude_bands(2))) l1=.false.
+  if (l1) then
+    t1=occsvnr(ist1,ik)-occsvnr(ist2,jk)
+    if (abs(t1).gt.1d-6) then
+      t2=sign(scissor,t1)
+      wt(i)=t1/(evalsvnr(ist1,ik)-evalsvnr(ist2,jk)-t2+w)
+    endif
+  endif
+enddo !i
+call papi_timer_start(pt_megqblh2)
+do ig=1,ngq
+  megqblh2(1:nmegqblh(ikloc),ig)=dconjg(megqblh(1:nmegqblh(ikloc),ig,ikloc))*wt(1:nmegqblh(ikloc))
+enddo
+call papi_timer_stop(pt_megqblh2)
+call papi_timer_start(pt_chi0_zgemm)
+call zgemm('T','N',ngq,ngq,nmegqblh(ikloc),zone,megqblh(1,1,ikloc),nstsv*nstsv,&
+  &megqblh2(1,1),nstsv*nstsv,zone,chi0w(1,1),ngq)
+call papi_timer_stop(pt_chi0_zgemm)
+deallocate(wt,megqblh2)
+return
+end subroutine
+
+subroutine read_exxvxc(nst,exxnk,vxcnk,ierr1)
+use modmain
+use mod_addons_q
+!
+implicit none
+!
+integer,intent(in) :: nst
+real(8), intent(out) :: exxnk(nst,nspinor,nkptnrloc)
+real(8),intent(out) :: vxcnk(nst,nspinor,nkptnrloc)
+integer,intent(out) :: ierr1
+!
+integer :: ikloc,isp1,ik,i,tmp,ios
+logical :: exst
+character*100 :: fname,fspn,fname_tot
+!
+!
+ierr1=0
+
+do ikloc=1,nkptnrloc
+ ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
+ write(fname,'("Exx_Vxc_k",I4.4)')ik
+
+ do isp1=1,nspinor
+  if (nspinor.eq.1) then
+   fspn=''
+  else
+   write(fspn,'("_spn",I1.1)') isp1
+  endif
+  fname_tot=trim(adjustl(fname))//trim(adjustl(fspn))
+  inquire(file=fname_tot, exist=exst)
+  if (exst) then
+   open(164,file=fname_tot,action='read',form="FORMATTED",status="old")
+
+   do i=1,nst
+    read(164,*,iostat=ios) tmp,exxnk(i,isp1,ikloc),vxcnk(i,isp1,ikloc)
+   enddo !i
+   exxnk(:,isp1,ikloc)=exxnk(:,isp1,ikloc)/ha2ev  ! convert to Ha
+   vxcnk(:,isp1,ikloc)=vxcnk(:,isp1,ikloc)/ha2ev
+   close(164)
+  else
+   write(*,*) "Exx files are not found!",ik
+   ierr1=1
+  endif
+ enddo !isp1
+enddo !ikloc
+
+call mpi_grid_reduce(ierr1,1,dims=(/dim_k/),all=.true.,op=op_max)
+
+if (ierr1.ne.0) then
+ write(*,*) "ierr .ne. 0:",ierr1
+ exxnk=0.d0
+ vxcnk=0.d0
+endif
+
+return
+end subroutine
+
+subroutine ft_tw3(indx,bf,n1,n2,n3,s0,s1)
+use modmain
+use mod_addons_q
+!
+implicit none
+!
+integer, intent(in) :: indx
+integer, intent(in) :: bf
+integer, intent(in) :: n1
+integer, intent(in) :: n2
+integer, intent(in) :: n3
+complex(8),intent(in) :: s0(n1,n2,n3)
+complex(8),intent(inout) :: s1(n1,n2,n3)
+!
+integer :: i1,i2,ntmp,n
+complex(8) :: a1(n1,n2,n3-1),a2(n1,n2,n3-1)
+complex(8) :: ff
+real(8) :: wn
+!
+! Fourier transformation between \tau domain and Matsubara frequency domain
+!indx = +1    \tau -> iwn
+!       -1     iwn -> \tau
+! bf =  1    Bosonic
+!    = -1    Fermion
+s1=zzero
+a1=zzero
+a2=zzero
+n=0
+
+if (indx.eq.1) then
+! linear interpolation
+ do i1=2,n3
+  a1(:,:,i1-1)=s0(:,:,i1)-s0(:,:,i1-1)
+  a1(:,:,i1-1)=a1(:,:,i1-1)/(lr_w(i1)-lr_w(i1-1))
+  a2(:,:,i1-1)=s0(:,:,i1)-a1(:,:,i1-1)*lr_w(i1)
+ enddo
+
+ do i2=-int((n3-1)/2),int(n3/2)
+  n=n+1
+  if (bf.eq.-1) then
+   wn=(2.d0*i2+1)*pi/bhbar
+  elseif (bf.eq.1) then
+   wn=2.d0*i2*pi/bhbar
+  endif
+
+  if (abs(wn).gt.1.d-10) then
+   do i1=2,n3
+    ff=exp(zi*wn*lr_w(i1))*lr_w(i1)-exp(zi*wn*lr_w(i1-1))*lr_w(i1-1)
+    ff=ff/zi/wn
+    s1(:,:,n)=s1(:,:,n)+ff*a1(:,:,i1-1)
+
+    ff=exp(zi*wn*lr_w(i1))-exp(zi*wn*lr_w(i1-1))
+    ff=ff/zi/wn
+    s1(:,:,n)=s1(:,:,n)+ff*(a2(:,:,i1-1)-a1(:,:,i1-1)/zi/wn)
+   enddo
+  else
+   do i1=2,n3
+    ff=0.5d0*(lr_w(i1)**2-lr_w(i1-1)**2)
+    s1(:,:,n)=s1(:,:,n)+ff*a1(:,:,i1-1)
+    ff=lr_w(i1)-lr_w(i1-1)
+    s1(:,:,n)=s1(:,:,n)+ff*a2(:,:,i1-1)
+   enddo
+  endif
+ enddo
+elseif (indx.eq.-1) then
+ do i2=1,n3  !tau
+  n=0
+  do i1=-int((n3-1)/2),int(n3/2)
+   if (bf.eq.-1) then
+    wn=(2.d0*i1+1)*pi/bhbar
+   elseif (bf.eq.1) then
+    wn=2.d0*i1*pi/bhbar
+   endif
+
+   ff=exp(-zi*wn*lr_w(i2))
+   n=n+1
+   s1(:,:,i2)=s1(:,:,i2)+ff*s0(:,:,n)
+  enddo
+ enddo
+ s1(:,:,:)=s1(:,:,:)/bhbar
+endif
+
+return
+end subroutine
+
+subroutine ft_tw4(indx,bf,n1,n2,n3,n4,s0,s1)
+use modmain
+use mod_addons_q
+!
+implicit none
+!
+integer, intent(in) :: indx
+integer, intent(in) :: bf
+integer, intent(in) :: n1
+integer, intent(in) :: n2
+integer, intent(in) :: n3
+integer, intent(in) :: n4
+complex(8),intent(in) :: s0(n1,n2,n3,n4)
+complex(8),intent(out) :: s1(n1,n2,n3,n4)
+!
+integer :: i1,i2,ntmp,n
+complex(8) :: a1(n1,n2,n3,n4-1),a2(n1,n2,n3,n4-1)
+complex(8) :: ff
+real(8) :: wn
+!
+! Fourier transformation between \tau domain and Matsubara frequency domain
+!indx = +1    \tau -> iwn
+!       -1     iwn -> \tau
+! bf  =  1    bosonic
+!     = -1    fermion
+s1=zzero
+a1=zzero
+a2=zzero
+n=0
+
+if (indx.eq.1) then
+! linear interpolation
+ do i1=2,n4
+  a1(:,:,:,i1-1)=s0(:,:,:,i1)-s0(:,:,:,i1-1)
+  a1(:,:,:,i1-1)=a1(:,:,:,i1-1)/(lr_w(i1)-lr_w(i1-1))
+  a2(:,:,:,i1-1)=s0(:,:,:,i1)-a1(:,:,:,i1-1)*lr_w(i1)
+ enddo
+
+ do i2=-int((n4-1)/2),int(n4/2)
+  n=n+1
+  if (bf.eq.-1) then
+   wn=(2.d0*i2+1)*pi/bhbar
+  elseif (bf.eq.1) then
+   wn=2.d0*i2*pi/bhbar
+  endif
+
+  if (abs(wn).gt.1.d-10) then
+   do i1=2,n4
+    ff=exp(zi*wn*lr_w(i1))*lr_w(i1)-exp(zi*wn*lr_w(i1-1))*&
+          & lr_w(i1-1)
+    ff=ff/zi/wn
+    s1(:,:,:,n)=s1(:,:,:,n)+ff*a1(:,:,:,i1-1)
+
+    ff=exp(zi*wn*lr_w(i1))-exp(zi*wn*lr_w(i1-1))
+    ff=ff/zi/wn
+    s1(:,:,:,n)=s1(:,:,:,n)+ff*(a2(:,:,:,i1-1)-a1(:,:,:,i1-1)/zi/wn)
+   enddo
+  else
+   do i1=2,n4
+    ff=0.5d0*(lr_w(i1)**2-lr_w(i1-1)**2)
+    s1(:,:,:,n)=s1(:,:,:,n)+ff*a1(:,:,:,i1-1)
+    ff=lr_w(i1)-lr_w(i1-1)
+    s1(:,:,:,n)=s1(:,:,:,n)+ff*a2(:,:,:,i1-1)
+   enddo
+  endif
+ enddo
+elseif (indx.eq.-1) then
+ do i2=1,n4
+  n=0
+  do i1=-int((n4-1)/2),int(n4/2)
+   if (bf.eq.-1) then
+    wn=(2.d0*i1+1)*pi/bhbar
+   elseif (bf.eq.1) then
+    wn=2.d0*i1*pi/bhbar
+   endif
+
+   ff=exp(-zi*wn*lr_w(i2))
+   n=n+1
+   s1(:,:,:,i2)=s1(:,:,:,i2)+ff*s0(:,:,:,n)
+  enddo
+ enddo
+ s1(:,:,:,:)=s1(:,:,:,:)/bhbar
+endif
+
+return
+end subroutine
+
+end module

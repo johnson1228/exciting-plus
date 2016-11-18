@@ -1,0 +1,88 @@
+subroutine genu4(iq,nwloc)
+use modmain
+use mod_addons_q
+use mod_wannier
+use mod_expigqr
+use mod_linresp
+implicit none
+integer, intent(in) :: iq
+integer, intent(in) :: nwloc
+integer iwloc,iw,n,n1,i,ig,vtl(3),j,it
+real(8) v2(3),vtc(3),vqc1(3)
+complex(8), allocatable :: vscrn(:,:)
+complex(8), allocatable :: megqwan2(:,:)
+complex(8), allocatable :: megqwan3(:,:)
+complex(8), allocatable :: zm1(:,:)
+complex(8), allocatable :: zm2(:,:)
+complex(8), allocatable :: krnl(:,:)
+complex(8), allocatable :: epsilon(:,:)
+complex(8) zt1
+
+if (screenu4) call genchi0(iq)
+
+if (vq_gamma(iq)) then
+  vqc1=0.d0
+else
+  vqc1(:)=vqc(:,iq)
+endif
+
+call papi_timer_start(pt_uscrn)
+allocate(vscrn(ngq(iq),ngq(iq)))
+allocate(krnl(ngq(iq),ngq(iq)))
+allocate(epsilon(ngq(iq),ngq(iq)))
+allocate(zm1(megqwantran%nwt,ngq(iq)))
+allocate(zm2(megqwantran%nwt,megqwantran%nwt))
+krnl=zzero
+do ig=1,ngq(iq)
+  krnl(ig,ig)=vhgq(ig,iq)
+enddo
+allocate(megqwan2(ngq(iq),megqwantran%nwt))   
+allocate(megqwan3(ngq(iq),megqwantran%nwt))   
+! compute megqwan2=<W_n|e^{+i(G+q)x}|W_n'T'> and also rearrange megqwan
+do i=1,megqwantran%nwt
+  n=megqwantran%iwt(1,i)
+  n1=megqwantran%iwt(2,i)
+  vtl(:)=megqwantran%iwt(3:5,i)
+  v2=dble(vtl)
+  call r3mv(avec,v2,vtc)
+  zt1=exp(-zi*dot_product(vqc1,vtc))
+  j=megqwantran%iwtidx(n1,n,-vtl(1),-vtl(2),-vtl(3))
+  if (j.le.0) then
+    write(*,'("Error(genu4) wrong index of matrix element")')
+    write(*,'(" n,n1,vtl : ",5I4)')n,n1,vtl
+    call pstop
+  endif
+  megqwan2(:,i)=dconjg(megqwan(j,:))*zt1
+  megqwan3(:,i)=megqwan(i,:)
+enddo
+! compute 4-index U
+! TODO: comments with formulas
+do iwloc=1,nwloc
+  iw=mpi_grid_map(lr_nw,dim_k,loc=iwloc)
+! broadcast chi0
+  if (screenu4) then
+    call genvscrn(iq,chi0loc(1,1,iwloc),krnl,vscrn,epsilon)
+  else
+    vscrn=krnl
+  endif
+  call zgemm('T','N',megqwantran%nwt,ngq(iq),ngq(iq),zone,megqwan2,ngq(iq),&
+    &vscrn,ngq(iq),zzero,zm1,megqwantran%nwt)
+  call zgemm('N','N',megqwantran%nwt,megqwantran%nwt,ngq(iq),zone,zm1,&
+    &megqwantran%nwt,megqwan3,ngq(iq),zzero,zm2,megqwantran%nwt)
+  do it=1,megqwantran%ntr
+    v2=dble(megqwantran%vtr(:,it))
+    call r3mv(avec,v2,vtc)
+    zt1=exp(-zi*dot_product(vqc1,vtc))/omega/nkptnr
+    call zaxpy((megqwantran%nwt)**2,zt1,zm2(1,1),1,u4(1,1,it,iwloc),1)
+  enddo
+enddo
+deallocate(megqwan2)
+deallocate(megqwan3)
+deallocate(zm1)
+deallocate(zm2)
+deallocate(krnl,epsilon)
+deallocate(vscrn)
+call papi_timer_stop(pt_uscrn)
+return
+end
+

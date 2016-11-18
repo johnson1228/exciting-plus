@@ -1,0 +1,24 @@
+#PBS -A m526
+#PBS -N si_150_gw
+#PBS -o ep.out
+#PBS -e ep.err
+#PBS -j oe
+#PBS -m abe
+#PBS -M drink.217@gmail.com
+#PBS -q debug
+#PBS -l mppwidth=144
+#PBS -l walltime=00:30:00
+
+cd $PBS_O_WORKDIR 
+
+module unload cray-libsci
+
+module load mkl
+
+#aprun -n 64 /global/u2/c/chuheng/g0w0_rai_Sep_19_2014_edison/src/elk
+
+#aprun -n 64 /global/scratch2/sd/chuheng/g0w0_rai_Sep_30_2014_edison/src/elk
+
+#aprun -n 128 /global/scratch2/sd/chuheng/g0w0_rai_Oct_03_2014_edison/src/elk
+
+aprun -n 128 /global/u2/c/chuheng/g0w0_rai_Dec_25_2014_edison/src/elk

@@ -1,0 +1,94 @@
+
+! Copyright (C) 2002-2007 J. K. Dewhurst, S. Sharma and C. Ambrosch-Draxl.
+! This file is distributed under the terms of the GNU General Public License.
+! See the file COPYING for license details.
+
+!BOP
+! !ROUTINE: seceqn
+subroutine seceqn(ikloc,evalfv,evecfv,evecsv)
+! !USES:
+use modmain
+use mod_wannier
+use mod_sic
+use mod_libapw
+! !INPUT/OUTPUT PARAMETERS:
+!   ik     : k-point number (in,integer)
+!   evalfv : first-variational eigenvalues (out,real(nstfv))
+!   evecfv : first-variational eigenvectors (out,complex(nmatmax,nstfv))
+!   evecsv : second-variational eigenvectors (out,complex(nstsv,nstsv))
+! !DESCRIPTION:
+!   Solves the first- and second-variational secular equations. See routines
+!   {\tt match}, {\tt seceqnfv}, {\tt seceqnss} and {\tt seceqnsv}.
+!
+! !REVISION HISTORY:
+!   Created March 2004 (JKD)
+!EOP
+!BOC
+implicit none
+! arguments
+integer, intent(in) :: ikloc
+real(8), intent(out) :: evalfv(nstfv,nspnfv)
+complex(8), intent(out) :: evecfv(nmatmax,nstfv,nspnfv)
+complex(8), intent(out) :: evecsv(nstsv,nstsv)
+! local variables
+integer ispn,ik,ist
+! allocatable arrays
+complex(8), allocatable :: apwalm(:,:,:,:,:)
+ik=mpi_grid_map(nkpt,dim_k,loc=ikloc)
+call timer_start(t_seceqn)
+allocate(apwalm(ngkmax,apwordmax,lmmaxapw,natmtot,nspnfv))
+#ifdef _LIBAPW_
+call match(ngk(1,ik),gkc(:,1,ikloc),tpgkc(:,:,1,ikloc), &
+   &sfacgk(:,:,1,ikloc),apwalm(:,:,:,:,1))
+call lapw_execute(ikloc,apwalm,evalsv(1,ik),occsv(1,ik),densmt,densir,3)
+deallocate(apwalm)
+call timer_stop(t_seceqn)
+return
+#endif
+! loop over first-variational spins (nspnfv=2 for spin-spirals only)
+do ispn=1,nspnfv
+! find the matching coefficients
+  call match(ngk(ispn,ik),gkc(:,ispn,ikloc),tpgkc(:,:,ispn,ikloc), &
+   &sfacgk(:,:,ispn,ikloc),apwalm(:,:,:,:,ispn))
+! solve the first-variational secular equation
+  if (tseqit) then
+! iteratively
+    call seceqnit(nmat(ispn,ik),ngk(ispn,ik),igkig(:,ispn,ikloc),vkl(:,ik), &
+     &vgkl(:,:,ispn,ikloc),vgkc(:,:,ispn,ikloc),apwalm(:,:,:,:,ispn), &
+     &evalfv(:,ispn),evecfv(:,:,ispn))
+  else
+! directly
+    call seceqnfv(ik,nmat(ispn,ik),ngk(ispn,ik),igkig(:,ispn,ikloc), &
+     &vgkc(:,:,ispn,ikloc),apwalm(:,:,:,:,ispn),evalfv(:,ispn),evecfv(:,:,ispn))
+  end if
+end do
+if (spinsprl) then
+! solve the spin-spiral second-variational secular equation
+  call seceqnss(ikloc,apwalm,evalfv,evecfv,evecsv)
+else
+! solve the second-variational secular equation
+  if (texactrho) then
+    call seceqnsv_exact(ikloc,apwalm,evalfv,evecfv,evecsv)
+  else
+    call seceqnsv(ikloc,apwalm,evalfv,evecfv,evecsv)
+  endif
+end if
+! apply scissor correction if required
+if (scissor.ne.0.d0) then
+  do ist=1,nstsv
+    if (evalsv(ist,ik).gt.efermi) evalsv(ist,ik)=evalsv(ist,ik)+scissor
+  end do
+end if
+if (wannier) then
+  call wan_gencsv_aux(ikloc,evecfv=evecfv,evecsv=evecsv)
+  if (wann_add_poco) then
+    call wann_seceqn(ikloc,evecsv)
+    call wan_gencsv_aux(ikloc,evecfv=evecfv,evecsv=evecsv)
+  endif
+endif
+deallocate(apwalm)
+call timer_stop(t_seceqn)
+return
+end subroutine
+!EOC
+

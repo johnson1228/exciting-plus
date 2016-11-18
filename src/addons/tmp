@@ -1,0 +1,120 @@
+1,2c1,2
+<       SUBROUTINE pzlaprnt1( M, N, A, IA, JA, DESCA, IRPRNT, ICPRNT,
+<      &                     CMATNM, NOUT, WORK )
+---
+>       SUBROUTINE pdlaprnt1( M, N, A, IA, JA, DESCA, IRPRNT, ICPRNT,
+>      $                     CMATNM, NOUT, WORK )
+15c15
+<       COMPLEX*16         A( * ), WORK( * )
+---
+>       DOUBLE PRECISION   A( * ), WORK( * )
+21c21
+< *  PZLAPRNT prints to the standard output a distributed matrix sub( A )
+---
+> *  PDLAPRNT prints to the standard output a distributed matrix sub( A )
+90c90
+< *  A       (local input) COMPLEX*16 pointer into the local memory to a
+---
+> *  A       (local input) DOUBLE PRECISION pointer into the local memory to a
+118c118
+< *  WORK    (local workspace) COMPLEX*16
+---
+> *  WORK    (local workspace) DOUBLE PRECISION
+137c137
+<      $                   ZGERV2D, ZGESD2D
+---
+>      $                   DGERV2D, DGESD2D
+144c144
+<       INTRINSIC          DBLE, DIMAG, MIN
+---
+>       INTRINSIC          MIN
+154c154
+<      &              IIA, JJA, IAROW, IACOL )
+---
+>      $              IIA, JJA, IAROW, IACOL )
+172,174c172
+<      $                   CMATNM, IA+K, JA+H,
+<      $                   DBLE( A( II+K+(JJ+H-1)*LDA ) ),
+<      $                   DIMAG( A( II+K+(JJ+H-1)*LDA ) )
+---
+>      $                   CMATNM, IA+K, JA+H, A( II+K+(JJ+H-1)*LDA )
+179c177
+<                CALL ZGESD2D( ICTXT, IB, 1, A( II+(JJ+H-1)*LDA ), LDA,
+---
+>                CALL DGESD2D( ICTXT, IB, 1, A( II+(JJ+H-1)*LDA ), LDA,
+182c180
+<                CALL ZGERV2D( ICTXT, IB, 1, WORK, DESCA( MB_ ),
+---
+>                CALL DGERV2D( ICTXT, IB, 1, WORK, DESCA( MB_ ),
+186,187c184
+<      $                   CMATNM, IA+K-1, JA+H, DBLE( WORK( K ) ),
+<      $                   DIMAG( WORK( K ) )
+---
+>      $                   CMATNM, IA+K-1, JA+H, WORK( K )
+204,206c201
+<      $                      CMATNM, I+K, JA+H,
+<      $                      DBLE( A( II+K+(JJ+H-1)*LDA ) ),
+<      $                      DIMAG( A( II+K+(JJ+H-1)*LDA ) )
+---
+>      $                      CMATNM, I+K, JA+H, A( II+K+(JJ+H-1)*LDA )
+211c206
+<                   CALL ZGESD2D( ICTXT, IB, 1, A( II+(JJ+H-1)*LDA ),
+---
+>                   CALL DGESD2D( ICTXT, IB, 1, A( II+(JJ+H-1)*LDA ),
+214c209
+<                   CALL ZGERV2D( ICTXT, IB, 1, WORK, DESCA( MB_ ),
+---
+>                   CALL DGERV2D( ICTXT, IB, 1, WORK, DESCA( MB_ ),
+218,219c213
+<      $                      CMATNM, I+K-1, JA+H, DBLE( WORK( K ) ),
+<      $                      DIMAG( WORK( K ) )
+---
+>      $                      CMATNM, I+K-1, JA+H, WORK( K )
+249,251c243
+<      $                      CMATNM, IA+K, J+H,
+<      $                      DBLE( A( II+K+(JJ+H-1)*LDA ) ),
+<      $                      DIMAG( A( II+K+(JJ+H-1)*LDA ) )
+---
+>      $                      CMATNM, IA+K, J+H, A( II+K+(JJ+H-1)*LDA )
+256c248
+<                   CALL ZGESD2D( ICTXT, IB, 1, A( II+(JJ+H-1)*LDA ),
+---
+>                   CALL DGESD2D( ICTXT, IB, 1, A( II+(JJ+H-1)*LDA ),
+259c251
+<                   CALL ZGERV2D( ICTXT, IB, 1, WORK, DESCA( MB_ ),
+---
+>                   CALL DGERV2D( ICTXT, IB, 1, WORK, DESCA( MB_ ),
+263,264c255
+<      $                      CMATNM, IA+K-1, J+H, DBLE( WORK( K ) ),
+<      $                      DIMAG( WORK( K ) )
+---
+>      $                      CMATNM, IA+K-1, J+H, WORK( K )
+281,283c272
+<      $                         CMATNM, I+K, J+H,
+<      $                         DBLE( A( II+K+(JJ+H-1)*LDA ) ),
+<      $                         DIMAG( A( II+K+(JJ+H-1)*LDA ) )
+---
+>      $                         CMATNM, I+K, J+H, A( II+K+(JJ+H-1)*LDA )
+288c277
+<                      CALL ZGESD2D( ICTXT, IB, 1, A( II+(JJ+H-1)*LDA ),
+---
+>                      CALL DGESD2D( ICTXT, IB, 1, A( II+(JJ+H-1)*LDA ),
+291c280
+<                      CALL ZGERV2D( ICTXT, IB, 1, WORK, DESCA( MB_ ),
+---
+>                      CALL DGERV2D( ICTXT, IB, 1, WORK, DESCA( MB_ ),
+295,296c284
+<      $                         CMATNM, I+K-1, J+H, DBLE( WORK( K ) ),
+<      $                         DIMAG( WORK( K ) )
+---
+>      $                         CMATNM, I+K-1, J+H, WORK( K )
+317c305
+<  9999 FORMAT(A,'(',I6,',',I6,')=',D30.18, '+i*(',D30.18, ')')
+---
+>  9999 FORMAT(A,'(',I6,',',I6,')=',D30.18)
+321c309
+< *     End of PZLAPRNT
+---
+> *     End of PDLAPRNT
+323a312
+> 

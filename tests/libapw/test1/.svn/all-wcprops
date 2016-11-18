@@ -1,0 +1,53 @@
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/!svn/ver/1759/trunk/tests/libapw/test1
+END
+elk.in
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/!svn/ver/1758/trunk/tests/libapw/test1/elk.in
+END
+INFO.OUT_
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/1758/trunk/tests/libapw/test1/INFO.OUT_
+END
+O.in
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/svn/!svn/ver/1758/trunk/tests/libapw/test1/O.in
+END
+TOTENERGY.OUT_
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/1758/trunk/tests/libapw/test1/TOTENERGY.OUT_
+END
+LINENGY.OUT_
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/1759/trunk/tests/libapw/test1/LINENGY.OUT_
+END
+Ni.in
+K 25
+svn:wc:ra_dav:version-url
+V 49
+/svn/!svn/ver/1758/trunk/tests/libapw/test1/Ni.in
+END
+EIGVAL.OUT_
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/1758/trunk/tests/libapw/test1/EIGVAL.OUT_
+END
+revision
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/1758/trunk/tests/libapw/test1/revision
+END

@@ -1,0 +1,367 @@
+subroutine scgw_tau(fnum,bndrg,iqrmap,qqnrmap,rkmap,kmap,kknrmap)
+use modmain
+use mod_addons_q
+use mod_nrkp
+use mod_linresp
+use mod_expigqr
+!
+implicit none
+integer,intent(in) :: fnum
+integer,intent(in) :: bndrg(2,nspinor)
+integer,intent(in) :: iqrmap(2,nkpt+nvq0-1)
+integer,intent(in) :: qqnrmap(nvq,2,nkpt+nvq0-1)
+integer,intent(in) :: rkmap(nsymcrys,nkptnr)
+integer,intent(in) :: kmap(2,nkpt)
+integer,intent(in) :: kknrmap(nkptnr,2,nkpt)
+!
+integer :: ibnd,fbnd,iter,nvqr,iqloc,iq,ierr1,ierr2,n
+integer :: ist1,ist,ik1,iqbz,irk
+integer :: i,ik,ikloc,iw,isp1
+integer :: iter0, q0,ios,exst
+real :: diff,maxdel
+complex(8),allocatable :: gf_tau(:,:,:,:),gf_tau_(:,:,:,:)
+complex(8),allocatable :: sig_c(:,:,:,:,:)
+complex(8),allocatable :: sig_c_aux(:,:,:,:,:),sig_c_aux_(:,:,:,:,:)
+complex(8),allocatable :: se_aux2(:,:,:,:)
+complex(8),allocatable :: sig_cw(:,:,:,:)
+complex(8),allocatable :: sig_cr(:,:,:,:)
+complex(8),allocatable :: sum1(:)
+real(8),allocatable :: sig_x(:,:,:,:),sig_x_(:,:,:,:)
+real(8),allocatable :: Eqp(:,:,:)
+integer,allocatable :: evalmap(:,:,:),neval(:,:)
+real(8) :: Zf
+complex(8) :: factor,c,dSe,enk
+character*100 fname,fspn,fname_tot
+!
+nvqr=nkpt+nvq0-1
+allocate(sig_c(nbnd,nspinor,lr_nw,nkptnrloc,2))
+allocate(sig_c_aux(nbnd,nspinor,lr_nw,nkptnr,nvqr))
+allocate(sig_c_aux_(nbnd,nspinor,lr_nw,nkptnr,nvqr))
+allocate(se_aux2(nbnd,nspinor,lr_nw,nkpt))
+allocate(sig_cw(nbnd,nspinor,niw,nkptnrloc))
+allocate(sig_cr(2,nbnd,nspinor,nkptnrloc))
+allocate(sig_x(nbnd,nspinor,nkptnrloc,2))
+allocate(sig_x_(nbnd,nspinor,nkptnrloc,2))
+allocate(gf_tau(nstsv,lr_nw,nkptnrloc,2))
+allocate(gf_tau_(nstsv,lr_nw,nkptnrloc,2))
+allocate(Eqp(nbnd,nspinor,nkptnrloc))
+allocate(evalmap(nbnd,nspinor,nkptnrloc))
+! number of subintervals between qpnb(1) and qpnb(2)
+allocate(neval(nspinor,nkptnrloc))
+allocate(sum1(lr_nw))
+gf_tau=zzero
+Eqp=0.d0
+sig_c=zzero
+sig_c_aux=zzero
+se_aux2=zzero
+sig_cw=zzero
+sig_x=0.d0
+iter0=0
+q0=0
+ierr1=1
+ierr2=1
+evalmap=0
+neval=0
+
+! find out degenencies between qpnb(1) and qpnb(2)
+call find_degenency(bndrg,evalmap,neval)
+ !initial Green's function
+call init_gf_tau(gf_tau(:,:,:,2))
+
+! scGW
+do iter=1,scgwni
+ ! set it to zero again
+ sig_c(:,:,:,:,1)=zzero
+ sig_c_aux=zzero
+ se_aux2=zzero
+
+ if (mpi_grid_root()) write(fnum,'("Iteration ",I3,":")') iter
+! exx obtained from iter=1. Valid only for gap-systems
+ if (iter.eq.1) then
+   if (gw_restart) then
+! read data from old files
+    call read_exxvxc(nbnd,sig_x(:,:,:,1),sig_x(:,:,:,2),ierr1)
+    if (ierr1.ne.0) goto 201
+   else
+201 continue
+    call genvxcnk(nbnd,sig_x(:,:,:,2))   ! vxc
+    call genexxnk(nbnd,sig_x(:,:,:,1))   ! exx
+! outputing exxnk and vxcnk
+    call write_exxvxc(nbnd,bndrg,sig_x(:,:,:,1),sig_x(:,:,:,2))
+   endif
+
+   if (gw_restart.and.ierr1.eq.0) then
+     ierr2=0
+     write(fname,'("tmp_Sc_ip",I4.4)') mpi_grid_dim_pos(dim_k)
+     inquire(file=trim(adjustl(fname)),exist=exst)
+
+     if (exst) then
+      open(165,file=trim(adjustl(fname)),action='read',form='unformatted',&
+           & status='old')
+      read(165) iter0,q0
+      read(165) sig_x_
+      read(165) sig_c_aux_
+      read(165) gf_tau_
+      close(165)
+     else
+      write(*,'("tmp_Sc file not found!",I4)') mpi_grid_dim_pos(dim_k)
+      ierr2=1 
+     endif
+
+     call mpi_grid_reduce(ierr2,1,dims=(/dim_k,dim_q/),all=.true.,&
+                         &op=op_max)
+     if (ierr2.ne.0) then
+      q0=0
+      iter0=0
+      if (mpi_grid_root()) then
+       write(fnum,'("Exx_Vxc arrays regenerated!")')
+       write(fnum,'("But tmp_Sc files corrupted, need to recalculate!")')
+       call timestamp(fnum)
+       call flushifc(fnum)
+      endif
+     else ! ierr2=0
+      sig_x(:,:,:,:)=sig_x_(:,:,:,:)
+      sig_c_aux(:,:,:,:,:)=sig_c_aux_(:,:,:,:,:)
+      gf_tau(:,:,:,:)=gf_tau_(:,:,:,:)
+     endif
+   endif
+ endif !iter.eq.1
+
+ if (mpi_grid_root()) then
+  write(fnum,'("ierr1,ierr2:",2I4)') ierr1,ierr2
+  write(fnum,'("iter0,q0:",2I4)') iter0,q0
+  call timestamp(fnum)
+  call flushifc(fnum)
+ endif
+
+ if (iter.le.(iter0-1)) cycle
+
+ if (mpi_grid_root()) then
+  write(fnum,'("Self-Consistent GW calculation starts: ",I2)') iter
+  write(fnum,'(" ")')
+  call flushifc(fnum)
+ endif
+
+! calculate the correlation self-energy
+ do iqloc=1,nvqr
+  iq=iqrmap(1,iqloc)
+  if ((iqloc.le.q0).and.(iter.le.iter0)) cycle
+
+  if (mpi_grid_root()) then
+   write(fnum,'("iq : ",I4," out of ",I4)') iqloc,nvqr
+   call timestamp(fnum)
+   call flushifc(fnum)
+  endif
+  
+  if (iter.eq.1) then
+   call genmegq(iq,.false.,.true.,.true.)
+   call get_adjoint_megqblh(iq)
+   if (scgwni.gt.1) call write_amegqblh(iq)
+  elseif (iter.gt.1) then
+   ! need to initialize idxkq(3,jk)
+   call init_kq(iq)
+   ! initialize nmegqblh
+   call init_band_trans(.true.)
+   ! read amegqblh
+   call read_amegqblh(iq)
+  endif
+!until here
+  call update_sigxc(gf_tau(:,:,:,2),iq,iqloc,iter,bndrg,sig_c_aux)
+  
+  if (mpi_grid_root((/dim_q/))) then
+   write(fname,'("tmp_Sc_ip",I4.4)') mpi_grid_dim_pos(dim_k)
+   open(166,file=trim(adjustl(fname)),form='unformatted',status='replace')
+   ! create the other tmp files, just in case!
+   if (mod(iqloc,2).eq.0) then !even
+    write(fname,'("e_tmp_Sc_ip",I4.4)') mpi_grid_dim_pos(dim_k)
+   else  !odd
+    write(fname,'("o_tmp_Sc_ip",I4.4)') mpi_grid_dim_pos(dim_k)
+   endif
+   open(1660,file=trim(adjustl(fname)),form='unformatted',status='replace')
+   write(166) iter,iqloc
+   write(1660) iter,iqloc
+   write(166) sig_x  ! in Ha
+   write(1660) sig_x  ! in Ha
+   write(166) sig_c_aux  ! in Ha
+   write(1660) sig_c_aux  ! in Ha
+   write(166) gf_tau
+   write(1660) gf_tau
+   close(166)
+   close(1660)
+  endif
+
+ enddo !iqloc
+ 
+ call mpi_grid_reduce(sig_c_aux(1,1,1,1,1),nbnd*nspinor*lr_nw*nkptnr*nvqr,&
+                   &dims=(/dim_k,dim_q/),all=.true.)
+
+ do ik1=1,nkpt
+  ik=kmap(1,ik1)
+  do iq=1,nvqr
+   do iqbz=1,iqrmap(2,iq)
+    irk=rkmap(qqnrmap(iqbz,2,iq),ik)
+    se_aux2(:,:,:,ik1)=se_aux2(:,:,:,ik1)+sig_c_aux(:,:,:,irk,iq)
+   enddo
+  enddo
+
+  do ikloc=1,nkptnrloc
+   ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
+   do i=1,kmap(2,ik1)
+    if (ik.eq.kknrmap(i,1,ik1)) sig_c(:,:,:,ikloc,1)=se_aux2(:,:,:,ik1)
+   enddo
+  enddo
+
+ enddo !ik1
+
+! symmetrization of self-energy matrix elements for degenerate states
+ if (nbnd.gt.1) then
+  do ikloc=1,nkptnrloc
+   do isp1=1,nspinor
+    do i=1,neval(isp1,ikloc)-1
+     ibnd=evalmap(i,isp1,ikloc)
+     fbnd=evalmap(i+1,isp1,ikloc)-1
+     if (fbnd.eq.ibnd) cycle
+
+     sum1(:)=zzero
+     do ist=ibnd,fbnd
+      sum1(:)=sum1(:)+sig_c(ist-bndrg(1,isp1)+1,isp1,:,ikloc,1)
+     enddo
+     sum1(:)=sum1(:)/(fbnd-ibnd+1)
+     do ist=ibnd,fbnd
+      sig_c(ist-bndrg(1,isp1)+1,isp1,:,ikloc,1)=sum1(:)
+     enddo
+
+    enddo !i
+   enddo !isp1
+  enddo !ikloc
+ endif
+
+ factor=-zone/nkptnr/omega
+ sig_c(:,:,:,:,1)=sig_c(:,:,:,:,1)*factor
+
+ if (mpi_grid_root((/dim_q/))) then
+ ! sig_c isp1=1
+  do ikloc=1,nkptnrloc
+   ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
+   write(fname,'("sigc_tau_k",I4.4)') ik
+   do ist1=qpnb(1),qpnb(2)
+    write(fspn,'("_ist",I3.3)') ist1
+    fname_tot=trim(adjustl(fname))//trim(adjustl(fspn))
+    open(168,file=fname_tot,action='write',form="FORMATTED",status="REPLACE")
+    i=ist1-qpnb(1)+1
+    do iw=1,lr_nw
+     write(168,'(3G18.8)') dreal(lr_w(iw)),dreal(sig_c(i,1,iw,ikloc,1))*ha2ev,&
+           & dimag(sig_c(i,1,iw,ikloc,1))*ha2ev
+    enddo
+    close(168)
+   enddo !ist1
+  enddo !ikloc
+
+ endif
+
+! dyson equation
+ call dyson_gf(iter,gf_tau(:,:,:,2),sig_c,sig_x,gf_tau(:,:,:,1))
+
+! check for convergence
+ maxdel=-100.d0
+ do ikloc=1,nkptnrloc
+  do ist1=qpnb(1),qpnb(2)
+    do iw=1,lr_nw
+     c=gf_tau(ist1,iw,ikloc,1)-gf_tau(ist1,iw,ikloc,2)
+     diff=sqrt(c*dconjg(c))
+     if (diff.ge.maxdel) maxdel=diff
+    enddo
+  enddo
+ enddo
+
+ if (mpi_grid_root()) then
+   write(fnum,'("maximum delta is, ",f8.4," 1/eV.")') maxdel/ha2ev
+   call flushifc(fnum)
+ endif
+
+ if (maxdel/ha2ev.le.0.01d0) then
+  if (mpi_grid_root()) then
+   write(fnum,'("maximum delta is less than 0.01 1/eV, ",f6.3)') maxdel/ha2ev
+   write(fnum,'("sc-GW calculation is converged!")')
+   write(fnum,'(" ")')
+   call flushifc(fnum)
+  endif
+  exit !exit the scGW loop
+ elseif (iter.lt.scgwni) then
+ !store the current self-energy matrix
+  sig_c(:,:,:,:,2)=sig_c(:,:,:,:,1)
+  sig_x(:,:,:,2)=sig_x(:,:,:,1)
+  gf_tau(:,:,:,2)=gf_tau(:,:,:,1)
+ endif
+
+enddo !scgwni
+
+! analytic continuation for Green's function
+call pade_ac_gf(gf_tau(:,:,:,1))
+
+!sigma_c(iw)
+call ft_tw4(1,-1,nbnd,nspinor,lr_nw,nkptnrloc,niw,sig_c(:,:,:,:,1),&
+          &sig_cw)
+
+! sig_cw
+if (mpi_grid_root((/dim_q/))) then
+ do ikloc=1,nkptnrloc
+  ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
+  write(fname,'("sigc_iw_k",I4.4)') ik
+  do ist1=qpnb(1),qpnb(2)
+   write(fspn,'("_ist",I3.3)') ist1
+   fname_tot=trim(adjustl(fname))//trim(adjustl(fspn))
+   open(168,file=fname_tot,action='write',form="FORMATTED",status="REPLACE")
+   i=ist1-qpnb(1)+1
+   do iw=1,niw
+    write(168,'(3G18.8)') iw,dreal(sig_cw(i,1,iw,ikloc))*ha2ev,&
+          & dimag(sig_cw(i,1,iw,ikloc))*ha2ev
+   enddo
+   close(168)
+  enddo !ist1
+ enddo !ikloc
+endif
+
+!analytic continuation
+call pade_ac_sc(nbnd,nspinor,niw,nkptnrloc,sig_cw,sig_cr)
+
+if (mpi_grid_root((/dim_q/))) then
+ do ikloc=1,nkptnrloc
+  ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
+  write(fname,'("Eqp_k",I4.4)')ik
+  do isp1=1,nspinor
+   ibnd=bndrg(1,isp1)
+   fbnd=bndrg(2,isp1)
+
+   if (nspinor.eq.1) then
+    fspn=''
+   else
+    write(fspn,'("_spn",I1.1)') isp1
+   endif
+
+   fname_tot=trim(adjustl(fname))//trim(adjustl(fspn))
+   open(168,file=fname_tot,action='write',form="FORMATTED",status="REPLACE")
+
+   do ist1=ibnd,fbnd
+    i=ist1-ibnd+1
+    dSe=sig_cr(2,i,isp1,ikloc)-sig_cr(1,i,isp1,ikloc)
+    Zf=1.d0/(1.d0-dreal(dSe)/del_e)
+    Eqp(i,isp1,ikloc)=evalsvnr(ist1,ik)+&
+         & Zf*dreal(sig_cr(1,i,isp1,ikloc)+sig_x(i,isp1,ikloc,1)- &
+         &  sig_x(i,isp1,ikloc,2))
+    write(168,'(I5,1X,5(G16.6,1X))') ist1,Eqp(i,isp1,ikloc)*ha2ev,&
+          & evalsvnr(ist1,ik)*ha2ev,sig_x(i,isp1,ikloc,2)*ha2ev,&
+          & dreal(sig_cr(1,i,isp1,ikloc))*ha2ev,Zf
+   enddo !ist1
+   close(168)
+  enddo !isp1
+ enddo !ikloc
+endif
+
+deallocate(gf_tau)
+deallocate(sig_c,sig_x,sig_cw,sig_cr)
+deallocate(sig_c_aux,se_aux2,evalmap,neval)
+deallocate(sig_c_aux_,sig_x_,gf_tau_,sum1)
+deallocate(Eqp)
+return
+end subroutine

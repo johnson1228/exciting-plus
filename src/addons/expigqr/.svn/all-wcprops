@@ -1,0 +1,89 @@
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/!svn/ver/1816/trunk/src/addons/expigqr
+END
+getmeidx.f90
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/1778/trunk/src/addons/expigqr/getmeidx.f90
+END
+gengntuju.f90
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/1803/trunk/src/addons/expigqr/gengntuju.f90
+END
+getwfkq.f90
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/1783/trunk/src/addons/expigqr/getwfkq.f90
+END
+genmegqblh.f90
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/1783/trunk/src/addons/expigqr/genmegqblh.f90
+END
+genmegqwan.f90
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/1778/trunk/src/addons/expigqr/genmegqwan.f90
+END
+init_gq.f90
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/1778/trunk/src/addons/expigqr/init_gq.f90
+END
+printmegqwan.f90
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/!svn/ver/1778/trunk/src/addons/expigqr/printmegqwan.f90
+END
+printmegqblh.f90
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/!svn/ver/1816/trunk/src/addons/expigqr/printmegqblh.f90
+END
+mod_expigqr.f90
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/1783/trunk/src/addons/expigqr/mod_expigqr.f90
+END
+getmaxgnt.f90
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/1783/trunk/src/addons/expigqr/getmaxgnt.f90
+END
+init_band_trans.f90
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/!svn/ver/1778/trunk/src/addons/expigqr/init_band_trans.f90
+END
+init_kq.f90
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/1775/trunk/src/addons/expigqr/init_kq.f90
+END
+init_gntuju.f90
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/1778/trunk/src/addons/expigqr/init_gntuju.f90
+END
+qname.f90
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/1059/trunk/src/addons/expigqr/qname.f90
+END
