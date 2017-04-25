@@ -4,17 +4,13 @@ CXX = CC
 CC = cc
 CPP_OPTS = -D_MPI_
  
-#F90_OPTS = -O0 -cpp $(CPP_OPTS) -fopenmp -funroll-loops -check all -traceback
-
-F90_OPTS = -O3 -cpp $(CPP_OPTS) -openmp -funroll-loops -check bounds -traceback
+F90_OPTS = -O3 -cpp $(CPP_OPTS) -qopenmp -funroll-loops -check bounds -traceback
 
 F90_LINK_OPTS=
 
 LAPACK_LIB = -mkl=cluster
 
-#LAPACK_LIB = /global/u2/c/chuheng/exciting-plus-read-only_v3/src/LAPACK/lapack.a
-
-#BLAS_LIB = /global/u2/c/chuheng/exciting-plus-read-only_v3/src/BLAS/blas.a
+#BLAS_LIB = 
 
 # === compile with HDF5 support ===
 #CPP_OPTS := $(CPP_OPTS) -D_HDF5_

@@ -40,3 +40,19 @@ J. K. Dewhurst, S. Sharma
 L. Nordstrom,  F. Cricchio, F. Bultmark
 E. K. U. Gross
 
+Notes on the GW module
+======================
+
+The current GW module includes two sub-modules that allow one to compute the 
+quasi-particle energies in (1) real-frequency domain, and (2) Matsubara-time domain.
+The details of the implementations can be found at::
+
+1. I.-H. Chu, A. Kozhevnikov, T. C. Schulthess, and H.-P. Cheng, "All-electron 
+GW quasiparticle band structures of group 14 nitride compounds", J Chem. Phys. 
+141, 044709 (2014), doi:http://dx.doi.org/10.1063/1.4890325.
+
+2. I.-H. Chu, J. P. Trinastic, Y.-P. Wang, A. G. Eguiluz, A. Kozhevnikov, T. C. 
+Schulthess, and H.-P. Cheng, "All-electron self-consistent GW in the Matsubara-time 
+domain: Implementation and benchmarks of semiconductors and insulators", Phys. Rev. B 
+93, 125210 (2016), doi:https://doi.org/10.1103/PhysRevB.93.125210
+	

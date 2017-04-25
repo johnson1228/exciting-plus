@@ -608,9 +608,9 @@ deallocate(kknrmap,kmap)
 deallocate(iqrmap,qqnrmap,rkmap,evalmap,neval)
 deallocate(sig_cc)
 
-!if (mpi_grid_root().and.scgwni.gt.1) then
-! call system('rm -f Temp_files/megq_*')
-!endif
+if (mpi_grid_root().and.scgwni.gt.1) then
+ call system('rm -f Temp_files/megq_*')
+endif
 
 return
 end subroutine

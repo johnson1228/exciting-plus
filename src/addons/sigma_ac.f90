@@ -29,7 +29,6 @@ complex(8) :: enk,wn(n3),zn(2)
 !test
 integer :: n0
 complex(8) :: rwn(2*cpe_N+1)  ! change it later
-!complex(8),allocatable :: tmp1(:,:,:,:)
 !character*100 :: fname,fspn,fname_tot
 complex(8),external :: ac_func
 !
@@ -37,8 +36,6 @@ allocate(gn(n3,n3))
 allocate(sigcoe(n3,n1,n2,nk))
 allocate(ctmp(n3,n1,n2,nk))
 !
-!test
-!allocate(tmp1(n4,n1,n2,n3))
 
 sigcoe=zzero
 sigcr=zzero
@@ -78,7 +75,7 @@ if (ac_sigma.eq.1) then
                  &(wn(iw2)-wn(iw1-1))/gn(iw1-1,iw2)
        endif
       enddo !iw2
-! gn(i,i) are the coefficients of the fitted self-energy
+      ! gn(i,i) are the coefficients of the fitted self-energy
       sigcoe(iw1,ist1,isp1,ikloc)=gn(iw1,iw1)
      enddo !iw1
     enddo !ist1
@@ -167,36 +164,7 @@ elseif (ac_sigma.eq.2.or.ac_sigma.eq.3) then
  call mpi_grid_reduce(sigcr(1,1,1,1),2*n1*n2*nk,dims=(/dim_q/),all=.true.)
 endif
 
-!test
-!do ikloc=1,n3
-! do isp1=1,n2
-!  do ist1=1,n1
-!   do iw1=1,n4
-!    enk=wn(iw1)
-!    tmp1(iw1,ist1,isp1,ikloc)=ac_func(n4,sigcoe(:,ist1,isp1,ikloc),wn,enk)
-!   enddo
-!  enddo
-! enddo
-!enddo
-
-! do ikloc=1,n3
-!  ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
-!  write(fname,'("sigc_iw2_k",I4.4)') ik
-!  do ist1=qpnb(1),qpnb(2)
-!   write(fspn,'("_ist",I3.3)') ist1
-!   fname_tot=trim(adjustl(fname))//trim(adjustl(fspn))
-!   open(168,file=fname_tot,action='write',form="FORMATTED",status="REPLACE")
-!   i=ist1-qpnb(1)+1
-!   do iw1=1,n4
-!    write(168,'(3G18.8)') iw1,dreal(tmp1(iw1,i,1,ikloc))*ha2ev,&
-!          & dimag(tmp1(iw1,i,1,ikloc))*ha2ev
-!   enddo
-!   close(168)
-!  enddo !ist1
-! enddo !ikloc
-
 deallocate(gn,ctmp,sigcoe)
-!deallocate(tmp1)
 return
 end subroutine
 
