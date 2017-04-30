@@ -1,4 +1,4 @@
-subroutine gwmain
+subroutine realw_gw
 use modmain
 use mod_addons_q
 use mod_nrkp
@@ -38,7 +38,7 @@ complex(8), allocatable :: corr_se_aux(:,:,:,:,:),sum1(:),se_aux2(:,:,:,:)
 call init0
 call init1
 if (.not.mpi_grid_in()) return
-if (mpi_grid_root()) call timestamp(6,"[gwmain] done init")
+if (mpi_grid_root()) call timestamp(6,"[Real freqnency GW] done init")
 !call init_q_mesh(8)
 ! if vq0c not used, set nvq0=8
 if (nvq0.ne.1) nvq0=8
@@ -67,8 +67,8 @@ if (mpi_grid_root()) then
 
   !create folders for temp files
   call system("mkdir -p Temp_files")
-
 endif
+
 ! generate wave-functions for entire BZ
 call genwfnr(151,tq0bz)
 
@@ -82,8 +82,6 @@ allocate(rkmap(48,nkptnr))
 allocate(kmap(2,nkpt))
 allocate(kknrmap(nkptnr,2,nkpt))
 call kq_map(iqrmap,qqnrmap,rkmap,kmap,kknrmap)
-
-if (mpi_grid_root()) write(*,*) "after kq_map"
 
 ! set Efermi=0
 evalsvnr(:,:)=evalsvnr(:,:)-efermi
@@ -105,6 +103,7 @@ do isp1=1,nspinor
   bndrg(2,isp1)=qpnb(2)+int(nstsv/2)
  endif
 enddo
+
 ! find out degenencies between bndrg(1,isp1) and bndrg(2,isp1)
 allocate(evalmap(nbnd,nspinor,nkptnrloc))
 ! number of subintervals between bndrg(1,isp1) and bndrg(2,isp1)
@@ -158,7 +157,7 @@ if (nebd_se.eq.1) nebd_se=nempty
 
 ! check exxtype
 if (exxtype.ne.0) then
- write(*,'("exxtype needs to be zero!")')
+ write(*,'("Exxtype needs to be zero!")')
  call pstop
 endif
 
@@ -252,8 +251,8 @@ enddo !ik
 !total exchange self-energy
 exxnk(:,:,:)=exxnk(:,:,:)+exxvc(:,:,:)
 
-! outmost loop for GW0 calculations, exx and vxc don't need to be updated
-! when the system has a nonzero band gap
+! Outmost loop for self-consistent GW calculations, exx and vxc don't need to be updated
+! when the system has a nonzero band gap.
 do istep=1,scgwni 
  if (istep.le.(step0-1)) cycle
  ! need to reset zero every time
@@ -270,25 +269,27 @@ do istep=1,scgwni
   write(151,'(" ")')
   call flushifc(151)
  endif
-! main loop over q-points
+
+ ! main loop over q-points
  do iqloc=1,nvqr
   iq=iqrmap(1,iqloc)
   if ((iqloc.le.q0).and.(istep.le.step0)) cycle
- 
+
   if (istep.eq.1) then
    call genmegq(iq,.false.,.true.,.true.)
    call get_adjoint_megqblh(iq)
    if (scgwni.gt.1.and.mpi_grid_root((/dim_q/))) call write_amegqblh(iq)
   elseif (istep.gt.1) then
-! need to initialize idxkq(3,jk)
+   
+   ! need to initialize idxkq(3,jk)
    call init_kq(iq)
-! initialize nmegqblh
+   ! initialize nmegqblh
    call init_band_trans(.true.)
-! read amegqblh
+   ! read amegqblh
    call read_amegqblh(iq)
   endif
  
-! type of GW calculations
+  ! type of GW calculations
   if (caltype.eq.0) then !ppa
    call ppa_self_energy(iq,iqloc,istep,nw_se,corr_se_aux)
   elseif (caltype.eq.1) then !rai
@@ -452,8 +453,7 @@ do istep=1,scgwni
 
 enddo !istep
 
-! G0W0 part, modified by I.H. Chu, H.P. Cheng, Jun,2012
- if ((caltype.eq.0).or.(caltype.eq.1).or.(caltype.eq.3)) then !ppa or rai
+if ((caltype.eq.0).or.(caltype.eq.1).or.(caltype.eq.3)) then !ppa or rai
   if (mpi_grid_root((/dim_q/))) then
    do ikloc=1,nkptnrloc
     ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
@@ -512,7 +512,7 @@ enddo !istep
     enddo !isp1
    enddo !ikloc
   endif
- endif !caltype=2
+endif !caltype=2
 
 ! wait for all the processors
 call mpi_grid_barrier()

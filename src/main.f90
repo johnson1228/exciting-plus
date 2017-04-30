@@ -122,9 +122,9 @@ do itask=1,ntasks
   case(801)
     call crpa
   case(802)
-    call gwmain
+    call realw_gw
   case(8022)
-    call scgw_tau
+    call matsu_gw
   case(804)
     call genscell
   case(805)

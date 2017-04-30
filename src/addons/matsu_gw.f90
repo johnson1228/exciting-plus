@@ -1,4 +1,4 @@
-subroutine scgw_tau
+subroutine matsu_gw
 use modmain
 use mod_addons_q
 use mod_nrkp
@@ -19,6 +19,7 @@ real(8) :: factor,c,tmem
 complex(8) :: dSe
 character*100 fname,fspn,fname_tot
 !
+! range of the band index for each spin channel
 integer,allocatable :: bndrg(:,:)
 ! symmetry mappings for k- and q-points
 integer,allocatable :: iqrmap(:,:)
@@ -51,7 +52,7 @@ complex(8),allocatable :: sig_cc(:,:,:,:)
 call init0
 call init1
 if (.not.mpi_grid_in()) return
-if (mpi_grid_root()) call timestamp(6,"[gwmain] done init")
+if (mpi_grid_root()) call timestamp(6,"[Matsubara time GW] done init")
 ! if vq0c not used, set nvq0=8
 if (nvq0.ne.1) nvq0=8
 call init_q_mesh(nvq0)   ! test

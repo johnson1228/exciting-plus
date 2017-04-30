@@ -54,18 +54,6 @@ call mpi_grid_reduce(pol(1,1,1),ngq(iq)*ngq(iq)*lr_nw,dims=(/dim_k,dim_q/), &
 !when nspinor=1, occmax=2
 pol(:,:,:)=pol(:,:,:)*occmax/(nkptnr*omega)
 
-!print out pol(G,G',2) for test
-!if (mpi_grid_root()) then
-!  write(fname,'("pol_tau2_iq",I3.3)') iq
-!  open(166,file=trim(adjustl(fname)),form="FORMATTED",status="REPLACE")
-!  do ig2=1,ngq(iq)
-!   do ig1=1,ngq(iq)
-!    write(166,'(4(G16.6))') ig1,ig2,dreal(pol(ig1,ig2,2)),dimag(pol(ig1,ig2,2))
-!   enddo
-!  enddo
-!  close(166)
-!endif
-
 deallocate(megqblh2,wt)
 deallocate(gf0kq_tau)
 
