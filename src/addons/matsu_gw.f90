@@ -79,16 +79,6 @@ if ((qpnb(1).gt.qpnb(2)).or.(qpnb(1).le.0)) qpnb(1)=1
 if ((qpnb(2).le.0).or.(qpnb(2).gt.nstsv)) qpnb(2)=nstsv
 nbnd=qpnb(2)-qpnb(1)+1
 !
-! find out the energy range
-do isp1=1,nspinor
- if (isp1.eq.1) then
-  bndrg(1,isp1)=qpnb(1)
-  bndrg(2,isp1)=qpnb(2)
- elseif (isp1.eq.2) then   !spin-polarized
-  bndrg(1,isp1)=qpnb(1)+int(nstsv/2)
-  bndrg(2,isp1)=qpnb(2)+int(nstsv/2)
- endif
-enddo
 !
 ! Matsubara \tau mesh for the GW calculation
 call gen_gw_wmesh(1,emax,nw_se)
@@ -150,6 +140,17 @@ evalmap=0
 neval=0
 maxdel=0.d0
 maxdel_prev=0.d0
+!
+! find out the energy range
+do isp1=1,nspinor
+ if (isp1.eq.1) then
+  bndrg(1,isp1)=qpnb(1)
+  bndrg(2,isp1)=qpnb(2)
+ elseif (isp1.eq.2) then   !spin-polarized
+  bndrg(1,isp1)=qpnb(1)+int(nstsv/2)
+  bndrg(2,isp1)=qpnb(2)+int(nstsv/2)
+ endif
+enddo
 !
 ! find out mapping from q_{IBZ} to q_{BZ}, and k1 to k2=R^{-1}*k1
 call kq_map(iqrmap,qqnrmap,rkmap,kmap,kknrmap)
@@ -224,6 +225,8 @@ if (mpi_grid_root()) then
  call timestamp(151)
  call flushifc(151)
 endif
+
+call mpi_grid_barrier()
 
 ! Main loop of self-consistent GW calculation
 do iter=1,scgwni

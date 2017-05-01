@@ -3,6 +3,8 @@ F90 = ftn
 CXX = CC
 CC = cc
 CPP_OPTS = -D_MPI_
+
+#F90_OPTS = -O0 -cpp $(CPP_OPTS) -qopenmp -funroll-loops -check all -traceback
  
 F90_OPTS = -O3 -cpp $(CPP_OPTS) -qopenmp -funroll-loops -check bounds -traceback
 
