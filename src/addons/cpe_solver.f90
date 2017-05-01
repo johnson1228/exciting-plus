@@ -1,5 +1,5 @@
-subroutine cpe_init(ist,isp,ik,ikloc, m0, m, om, sigm, n, on, ns, os,&
-                   &sigx_, vxcnk_,vclnk_, sigman)
+subroutine cpe_solver(ist, isp, ik, ikloc, m0, m, om, sigm, n, on, ns, os,&
+                     &sigx_, vxcnk_,vclnk_, sigman)
 use modmain
 use mod_nrkp
 use mod_linresp
@@ -9,7 +9,7 @@ integer, intent(in) :: ist
 integer, intent(in) :: isp
 integer, intent(in) :: ik
 integer, intent(in) :: ikloc
-integer, intent(in) :: m0
+integer, intent(in) :: m0 ! index of zero omega_m
 integer, intent(in) :: m ! number of input
 complex(8), intent(in) :: om(m)  ! omega_m
 complex(8), intent(in) :: sigm(m) !sig_m
@@ -26,19 +26,20 @@ complex(8), intent(inout) :: sigman(ns) ! sig_n
 !
 complex(8), allocatable :: amat(:,:),sig1(:)
 complex(8) :: tmp1, tmp2, tmp3, tmp4
-real(8) :: norm_new,norm0,l_min,x(20),y(20)
+real(8) :: new_norm,norm0,l_min,x(20),y(20)
 complex(8) :: sig0
 complex(8), allocatable :: alp(:),alp0(:),grad(:)
 complex(8), allocatable :: a_aux1(:,:),a_aux2(:),aux3(:),aux4(:)
 integer :: im, in, iter, is, i,m1,j, nls
 logical :: exst
 integer,parameter :: maxstep=1000
-real(8),parameter :: m0wt=4.d0
+!real(8),parameter :: m0wt=4.d0
 complex(8) :: z,sig_tmp,g_tmp,g2
 complex(8),external :: zdotc
 real(8),external :: fit_alp
 character*100 :: fname
 !
+! Number of non-negative w along imaginary axis
 m1=m-m0+1
 allocate(amat(m1,n))
 allocate(sig1(m1))
@@ -52,7 +53,7 @@ allocate(grad(n))
 amat=zzero
 ! init sig0 and alp
 alp0=zzero
-norm_new=0.d0
+new_norm=0.d0
 x=0.d0
 y=0.d0
 aux3=zzero
@@ -60,7 +61,7 @@ aux4=zzero
 a_aux1=zzero
 a_aux2=zzero
 !
-!initial guess for alp and sig0, either read in or using default values
+!initial guess for alp and sig0, either read in or use defaults from file
 write(fname,'("Sig_c_files/alp_tmp_k",I4.4,"_ist",I4.4)') ik,ist
 inquire(file=fname, exist=exst)
 if (exst) then
@@ -89,23 +90,24 @@ do i=1,m1
  enddo
 enddo
 
-! define sig1=sig0-sigm
+! define sig1=sig0-sigm. sig0 is assume zero in 
+! the current implementation
 do i=1,m1
  im=m0+i-1
  sig1(i)=-sigm(im)+sig0
 enddo
 
-! The norm is summed over square deviations / # of iwn
+! the norm is summed over square deviations / # of iwn
 amat(:,:)=amat(:,:)/sqrt(dble(m1))
 sig1(:)=sig1(:)/sqrt(dble(m1))
 
 ! increase weight for the first four data points
-if (m1.gt.4) then
-  amat(1:4,:)=amat(1:4,:)*sqrt(m0wt)
-  sig1(1:4)=sig1(1:4)*sqrt(m0wt)
-endif
+!if (m1.gt.4) then
+!  amat(1:4,:)=amat(1:4,:)*sqrt(m0wt)
+!  sig1(1:4)=sig1(1:4)*sqrt(m0wt)
+!endif
 
-! test
+! test outputs from root cpu
 if (mpi_grid_root()) then
  write(fname,'("Sig_c_files/sig_test_ib",I4.4)') ist
  open(169,file=fname,status='replace')
@@ -129,9 +131,10 @@ do iter=1,maxstep
    aux3(:)=sig1(:)
    call zgemv('N',m1,n,zone,amat(1,1),m1,alp(1),1,zone,aux3(1),1)
    tmp1=zdotc(m1,aux3(1),1,aux3(1),1)
-   norm_new=dreal(tmp1)
-   if (mpi_grid_root()) write(*,'("initial norm:",G19.10)') norm_new
+   new_norm=dreal(tmp1)
+   if (mpi_grid_root()) write(*,'("initial norm:",G19.10)') new_norm
   endif
+  
   ! compute gradient d(norm)/d(alp)
   aux4(:)=a_aux2(:)
   call zgemv('N',n,n,zone,a_aux1(1,1),n,alp(1),1,zone,aux4(1),1)
@@ -139,7 +142,7 @@ do iter=1,maxstep
    grad(in)=(2.d0,0.d0)*dreal(aux4(in))
   enddo
 
- ! prepare for line search
+  ! prepare for line search
   g2=zdotc(n,grad(1),1,grad(1),1)
   alp0(:)=alp(:)
     
@@ -155,18 +158,16 @@ do iter=1,maxstep
   endif
 
   i=0
-  norm0=norm_new
+  norm0=new_norm
 
 ! line search for lambda_min
   do while (.true.)
 ! initialization
    alp(:)=alp0(:)
    i=i+1
-   call computeNorm(n,m1,l_min,grad,amat,sig1,alp,norm_new)
+   call computeNorm(n,m1,l_min,grad,amat,sig1,alp,new_norm)
    x(i)=l_min
-   y(i)=norm_new
-
-!   if (mpi_grid_root()) write(*,*) "i,x,y:",i,x(i),y(i)
+   y(i)=new_norm
 
    if (i.lt.nls) then
      if (y(i).lt.norm0) then
@@ -202,7 +203,7 @@ do iter=1,maxstep
   enddo ! line search
 
   alp(:)=alp0(:)
-  norm_new=norm0
+  new_norm=norm0
   ! store the array alp
   if (mod(iter,100).eq.0) then
    write(fname,'("Sig_c_files/alp_tmp_k",I4.4,"_ist",I4.4)') ik, ist
@@ -213,14 +214,14 @@ do iter=1,maxstep
   endif
 
   if (mpi_grid_root()) &
-     &write(*,'(I6,1X,2(G18.12,1X))') iter,dreal(g2),norm_new
+     &write(*,'(I6,1X,2(G18.12,1X))') iter,dreal(g2),new_norm
 
   if (iter.gt.1.and.dreal(g2).gt.1.d+4) then
     write(*,*) "gradient is too large!", dreal(g2),ist,ik
     call pstop
   endif
 
-  if ((dreal(g2).lt.cpe_gtor.and.norm_new.lt.cpe_gtor*10.d0)&
+  if ((dreal(g2).lt.cpe_gtor.and.new_norm.lt.cpe_gtor*10.d0)&
       .or.iter.eq.maxstep) then
    if (mpi_grid_root()) write(*,*) "CPE process is done!", iter
    ! warning for not converged
@@ -229,10 +230,10 @@ do iter=1,maxstep
   endif
 enddo !iter
 
-! calculate sigma on real-w axis
 
+! calculate sigma on real-w axis
 if (mpi_grid_root()) then
- write(*,*) "g2,sig0,norm:",dreal(g2),dreal(sig0),norm_new
+ write(*,*) "g2,sig0,norm:",dreal(g2),dreal(sig0),new_norm
  do in=1,n
   write(*,*) "in,alp:",in,dreal(alp(in)),dimag(alp(in))
  enddo
@@ -269,7 +270,6 @@ enddo
 
 ! along real-w axis
 do im=1,2*n
- !z=(on(im)+on(im+1))*0.5d0+dcmplx(0.d0,lr_eta)
  z=dcmplx(-5.d0,lr_eta)+(im-1)*10.d0/(2*n-1)
  sig_tmp=sig0 
  do in=2,n-1 
@@ -300,4 +300,4 @@ close(173)
 deallocate(amat,sig1,alp,a_aux1,a_aux2,aux3,aux4,grad)
 deallocate(alp0)
 return
-end subroutine cpe_init
+end subroutine cpe_solver

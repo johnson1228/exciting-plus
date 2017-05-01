@@ -135,7 +135,8 @@ do ikloc=1,nkptnrloc
   enddo !isp1
  enddo !iwloc
 
- !evaluate valence contribution of exxnk in k-space
+ ! if exxtype is set 1, evaluate valence contribution of exchange self-energy 
+ ! in k-space
  if (exxtype.eq.1) then
   do isp1=1,nspinor
    ibnd=bndrg(1,isp1)

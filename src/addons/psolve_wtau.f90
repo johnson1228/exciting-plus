@@ -142,7 +142,7 @@ do igloc=1,m
 enddo
 
 ! mapping between iw and iw1-iw2, linear interpolation is applied
-call findiw_new(lr_nw,iwmap,dwr)
+call findiw(lr_nw,iwmap,dwr)
 
 do jgloc=1,m
  mc=mod((jgloc-1)/nblock,nyprocs)
