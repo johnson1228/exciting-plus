@@ -75,7 +75,7 @@ if (mpi_grid_root((/dim_q/))) then
  do ikloc=1,nkptnrloc
   ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
   do isp1=1,nspinor
-   write(fname,'("gf_w1_k",I4.4,"_isp",I1.1)') ik,isp1
+   write(fname,'("gf_w1_pade_k",I4.4,"_isp",I1.1)') ik,isp1
    do ist1=bndrg(1,isp1),bndrg(2,isp1)
      write(fspn,'("_ist",I3.3)') ist1
      fname_tot="Green_func/"//trim(adjustl(fname))//trim(adjustl(fspn))

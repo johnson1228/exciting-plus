@@ -29,7 +29,6 @@ complex(8) :: enk,wn(n3),zn(2)
 !test
 integer :: n0
 complex(8) :: rwn(2*cpe_N+1)  ! change it later
-!character*100 :: fname,fspn,fname_tot
 complex(8),external :: ac_func
 !
 allocate(gn(n3,n3))
@@ -59,8 +58,10 @@ do iw1=-int((n3-1)/2),int(n3/2)
  if (iw1.eq.0) n0=n
 enddo
 
+
+! Pade approximation by Vidberg and Serene
 if (ac_sigma.eq.1) then
-! pade approximation
+
   if (mpi_grid_root()) write(fnum,'("Perform Pade approximation for &
                         &the self-energy")')
   do ikloc=1,nk
@@ -94,12 +95,13 @@ if (ac_sigma.eq.1) then
     enddo
    enddo
   enddo
-elseif (ac_sigma.eq.2.or.ac_sigma.eq.3) then
-! continuous pole expansion
+
+! continuous pole expansion by Staar
+elseif (ac_sigma.eq.3) then
+
  if (mpi_grid_root()) write(fnum,'("Perform continuous-pole expansion for &
                         &the self-energy")')
-
-! bands are parallelized along dim_q
+ ! bands are parallelized along dim_q
  do ikloc=1,nk
   do isp1=1,n2
     nevalloc(isp1,ikloc)=mpi_grid_map(neval(isp1,ikloc),dim_q)
@@ -107,7 +109,8 @@ elseif (ac_sigma.eq.2.or.ac_sigma.eq.3) then
     write(*,*) "isp1,ikloc,nevalloc:",isp1,ikloc,nevalloc(isp1,ikloc)
   enddo
  enddo
-! define \omega_n along the real-w axis
+ 
+ ! define \omega_n along the real-w axis
  n=0
  do iw1=-cpe_N,cpe_N
   n=n+1
@@ -131,20 +134,12 @@ elseif (ac_sigma.eq.2.or.ac_sigma.eq.3) then
      zn(1)=dcmplx(evalsvnr(ibnd,ik),lr_eta)
      zn(2)=dcmplx(evalsvnr(ibnd,ik)+del_e,lr_eta)
 
-     if (ac_sigma.eq.2) then
-      ! Monte-Carlo like algorithm of CPE
-      if (mpi_grid_root()) write(fnum,'("Monte-Carlo like algorithm!")')
-
-      call cpe_mc(n3,wn,ctmp(:,j,isp1,ikloc),n,rwn,2,zn,&
-                 &sigcr(:,j,isp1,ikloc))
-     elseif (ac_sigma.eq.3) then
-      ! original algorithm of CPE
-      if (mpi_grid_root()) write(fnum,'("Frank-Wolfe like algorithm!")')
-      !
-      call cpe_init(ibnd,isp1,ik,ikloc,n0,n3,wn,ctmp(:,j,isp1,ikloc),n,&
-                 &rwn,2,zn,sigx(j,isp1,ikloc),vxcnk(j,isp1,ikloc),&
-                 &vclnk(j,isp1,ikloc),sigcr(:,j,isp1,ikloc))
-     endif
+     ! original algorithm of CPE
+     if (mpi_grid_root()) write(fnum,'("Frank-Wolfe like algorithm!")')
+     !
+     call cpe_solver(ibnd,isp1,ik,ikloc,n0,n3,wn,ctmp(:,j,isp1,ikloc),n,&
+                    &rwn,2,zn,sigx(j,isp1,ikloc),vxcnk(j,isp1,ikloc),&
+                    &vclnk(j,isp1,ikloc),sigcr(:,j,isp1,ikloc))
 
      ! perform CPE once for degenerate states
      if (i.lt.neval(isp1,ikloc)) then
@@ -167,30 +162,3 @@ endif
 deallocate(gn,ctmp,sigcoe)
 return
 end subroutine
-
-complex(8) function ac_func(n,coe,wn,z)
-use modmain
-use mod_linresp
-!
-implicit none
-!
-integer,intent(in) :: n
-complex(8),intent(in) :: coe(n)
-complex(8),intent(in) :: wn(n)
-complex(8),intent(in) :: z
-!
-integer :: i
-complex(8) :: tmp1,tmp2
-!
-!b=zzero
-tmp1=zzero
-
-do i=1,n-1
- tmp2=coe(n-i+1)*(z-wn(n-i))/(zone+tmp1)
- tmp1=tmp2
-enddo
-
-ac_func=coe(1)/(zone+tmp1)
-
-return
-end function

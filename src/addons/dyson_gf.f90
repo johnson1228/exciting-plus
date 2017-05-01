@@ -31,13 +31,12 @@ real(8),allocatable :: amat(:,:),bmat(:),z_aux(:)
 real(8),allocatable :: wd(:),dw(:),zint(:)
 integer,allocatable :: ipiv(:)
 integer :: iwmap(lr_nw)
-integer :: iw,ik,isp1,ibnd,fbnd,ie,flag1,flag2,flag3,ff,signdf,signdn
+integer :: iw,ik,isp1,ibnd,fbnd,ie,signdf,signdn
 character*100 :: fname,fname_tot,fspn
 !end test
 !
 ! assume the green function is diagonal at this moment
 ! beyond qpnb(1) and qpnb(2), Green's function is not updated
-! IH Chu, Nov,2014
 !
 ! finer grid points for z_aux
 dw0=dreal(lr_w(2)-lr_w(1))
@@ -60,8 +59,6 @@ iwmap=0
 do iw=1,nw
  wd(iw)=dw0*(iw-1)
 enddo
-
-if (mpi_grid_root()) write(*,*) "nw:",nw
 
 ! mapping from coarse grid to dense grid
 do iw=1,lr_nw
@@ -98,17 +95,11 @@ nelec0=nelec0*occmax
 call mpi_grid_reduce(nelec0,1,dims=(/dim_k/),all=.true.)
 if (mpi_grid_root()) write(*,'("initial # of electrons:",f8.4)') nelec0
 
-flag1=1
 ie=0
-ff=1
+signdf=0
+signdn=0
 
-do while (flag1.eq.1)
- ie=ie+1
- flag2=0
- flag3=0
- signdf=0
- signdn=0
- do ikloc=1,nkptnrloc
+do ikloc=1,nkptnrloc
   ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
   do isp1=1,nspinor
    ibnd=bndrg(1,isp1)
@@ -119,7 +110,7 @@ do while (flag1.eq.1)
     ! exchange part
     do iw1=1,lr_nw
       z_aux(iw1)=gf0(ist,iw1,ikloc)*(exxnk(i,isp1,ikloc)+exxvc(i,isp1,ikloc)&
-               & -vxcnk(i,isp1,ikloc)+vclnk(i,isp1,ikloc)-dyson_mu) ! test
+               & -vxcnk(i,isp1,ikloc)+vclnk(i,isp1,ikloc)-dyson_mu)
     enddo !iw1
 
     ! cubic spline interpolation for gf0 and sigc
@@ -162,76 +153,32 @@ do while (flag1.eq.1)
      gf(ist,iw,ikloc)=bmat(iwmap(iw))
     enddo
 
-    ! check occupation change ,more tests on this later
-!    if (scgwni.gt.1.and.(abs(gf(ist,lr_nw,ikloc)-gf0(ist,lr_nw,ikloc))&
-!        .gt.0.1d0.or.abs(gf(ist,1,ikloc)-gf0(ist,1,ikloc)).gt.0.1d0)) then
-!      write(*,'("occupation change is too large!",3(I4))') ist, ik, iter
-!      flag2=1
-!      ztmp=-gf(ist,lr_nw,ikloc)+gf0(ist,lr_nw,ikloc)
-!      if (ztmp.lt.-1d-8) then 
-        ! Ef is too low!
-!        signdf=-1
-!      else
-!        signdf=1
-!      endif
-!    endif
     if (mpi_grid_root()) write(*,'("ist,ikloc:",2I4)') ist,ikloc
    enddo !ist
   enddo !isp1
- enddo !ikloc
+enddo !ikloc
 
-! call mpi_grid_reduce(signdf,1,dims=(/dim_k/),all=.true.)
-! call mpi_grid_reduce(flag2,1,dims=(/dim_k/),op=op_max,all=.true.)
-
- ! calculate the number of electrons from gf
- nelec1=0.d0
- do ikloc=1,nkptnrloc
+! calculate the number of electrons from gf
+nelec1=0.d0
+do ikloc=1,nkptnrloc
   do ist=1,nstsv
     if (abs(gf(ist,lr_nw,ikloc)).gt.occ_tor) &
       & nelec1=nelec1-gf(ist,lr_nw,ikloc)/nkptnr
   enddo
- enddo
-
- nelec1=nelec1*occmax
- call mpi_grid_reduce(nelec1,1,dims=(/dim_k/),all=.true.)
- if (mpi_grid_root()) write(*,'("# of electrons:",f8.4,1X,I4)') nelec1,iter
-
- ! check the number of electrons
-! if (abs(nelec1-nelec0)/nelec0.gt.0.01d0) then
-!  flag3=1
-!  if (nelec1-nelec0.lt.-1.d-8) then
-!    signdn=-1
-!  else
-!    signdn=1
-!  endif
-! endif
-
- dele=nelec1-nelec0
- if (mpi_grid_root()) write(*,'("signdf:",I4,1X,I4)') signdf,ie
- if (mpi_grid_root()) write(*,'("signdn:",I4,1X,I4)') signdn,ie
- if (mpi_grid_root()) write(*,'("dyson_mu:",f8.4,1X,I4)') dyson_mu,ie
- if (mpi_grid_root()) write(*,'("nelec1-nelec0:",f8.4,1X,I4)') dele,ie
-
- if (flag2.eq.1) then
-   ! adjust the chemical potential
-   dyson_mu=dyson_mu-0.005d0*sign(1,signdf)
- elseif (flag2.eq.0.and.flag3.eq.1) then
-   ! adjust the chemical potential
-   dyson_mu=dyson_mu-0.001d0*sign(1,signdn)
- elseif ((flag2.eq.0.and.flag3.eq.0).or.ie.gt.20) then
-  flag1=0
- endif
-
- if (mpi_grid_root()) write(*,'("flag1,flag2,flag3:",3I4)') flag1,flag2,flag3
- if (ie.gt.20.and.mpi_grid_root()) write(*,'("ie.gt.20! ",I4)') ie
- if (mpi_grid_root().and.flag1.eq.0.and.flag2.eq.0.and.flag3.eq.0) then
-   write(*,'("Finish solving Dyson equation1",I3)') iter
-   write(*,'(" ")')
- endif
-
 enddo
 
-! gf
+nelec1=nelec1*occmax
+call mpi_grid_reduce(nelec1,1,dims=(/dim_k/),all=.true.)
+if (mpi_grid_root()) write(*,'("# of electrons:",f8.4,1X,I4)') nelec1,iter
+
+! Change of total number of electrons
+dele=nelec1-nelec0
+if (mpi_grid_root()) write(*,'("signdf:",I4,1X,I4)') signdf,ie
+if (mpi_grid_root()) write(*,'("signdn:",I4,1X,I4)') signdn,ie
+if (mpi_grid_root()) write(*,'("dyson_mu:",f8.4,1X,I4)') dyson_mu,ie
+if (mpi_grid_root()) write(*,'("nelec1-nelec0:",f8.4,1X,I4)') dele,ie
+
+! Updated Green's functin gf
 if (mpi_grid_root((/dim_q/))) then
  do ikloc=1,nkptnrloc
   ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
@@ -248,8 +195,7 @@ if (mpi_grid_root((/dim_q/))) then
  enddo !ikloc
 endif
 
-!!!!!!!!!!!!!!!!!!!!!!!!
-! begin test
+! Get Green's function in Matsubara frequency domain, gf_w
 do ist=qpnb(1),qpnb(2)
  i=ist-qpnb(1)+1
  gf_aux(i,:,:)=gf(ist,:,:)
@@ -259,7 +205,7 @@ enddo
 gf_auxc(:,:,:)=dcmplx(gf_aux(:,:,:))
 call ft_tw3(1,-1,nbnd,lr_nw,nkptnrloc,niw,gf_auxc(:,:,:),gf_w)
 
-! gf_w
+! G(iw): gf_w
 if (mpi_grid_root((/dim_q/))) then
  do ikloc=1,nkptnrloc
   ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
@@ -277,66 +223,6 @@ if (mpi_grid_root((/dim_q/))) then
   enddo !ist
  enddo !ikloc
 endif
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! begin test2
-!gf(:,:,:)=gf0(:,:,:)
-
-do isp1=1,nspinor
- ibnd=bndrg(1,isp1)
- fbnd=bndrg(2,isp1)
-
- do ist=ibnd,fbnd
-  i=ist-ibnd+1
-  gf0_aux(i,:,:)=gf0(ist,:,:)
- enddo
-
- gf0_auxc(:,:,:)=dcmplx(gf0_aux(:,:,:))
-
- call ft_tw3(1,-1,nbnd,lr_nw,nkptnrloc,niw,gf0_auxc(:,:,:),&
-          &gf0_w)
-
- gf_w(:,:,:)=gf0_w(:,:,:)
- sigc1(:,:,:)=dcmplx(sigc(:,isp1,:,:))
- call ft_tw3(1,-1,nbnd,lr_nw,nkptnrloc,niw,sigc1(:,:,:),&
-          &sigc_w)
-
- do ikloc=1,nkptnrloc
-  do iw=1,niw
-   do i=1,nbnd
-    ctmp=zone-gf0_w(i,iw,ikloc)*(sigc_w(i,iw,ikloc)+exxnk(i,isp1,ikloc)&
-         &+exxvc(i,isp1,ikloc)-vxcnk(i,isp1,ikloc)+vclnk(i,isp1,ikloc)&
-         &-dyson_mu) !test
-    if (mpi_grid_root().and.(i.eq.nbnd)) then
-     write(*,*) "iw,ctmp:",iw,ctmp
-    endif
-    gf_w(i,iw,ikloc)=gf_w(i,iw,ikloc)/ctmp
-   enddo !i
-  enddo !iw
- enddo !ikloc
-
-enddo !isp1
-
-! gf_w
-if (mpi_grid_root((/dim_q/))) then
- do ikloc=1,nkptnrloc
-  ik=mpi_grid_map(nkptnr,dim_k,loc=ikloc)
-  write(fname,'("gf_iw2_I",I1.1,"_k",I4.4)') iter,ik
-  do ist=qpnb(1),qpnb(2)
-   i=ist-qpnb(1)+1
-   write(fspn,'("_ist",I3.3)') ist
-   fname_tot="Green_func/"//trim(adjustl(fname))//trim(adjustl(fspn))
-   open(168,file=fname_tot,action='write',form="FORMATTED",status="REPLACE")
-   do iw=1,niw
-     write(168,'(3G18.8)') iw,dreal(gf_w(i,iw,ikloc)),&
-                         &dimag(gf_w(i,iw,ikloc))
-   enddo
-   close(168)
-  enddo !ist
- enddo !ikloc
-endif
-
-! end test
 
 deallocate(amat,z_aux,bmat,ipiv)
 deallocate(wd,zint,dw)

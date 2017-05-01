@@ -533,21 +533,6 @@ do ik=1,nkptnr
  if (lsplsymc(isym).eq.1) kmap(1,ik1)=ik
 enddo
 
-!if (mpi_grid_root()) then
-! do ik=1,nkptnr
-!  write(*,*) "ik:",ik
-!  do isym=1,nsymcrys
-!    write(*,*) "isym:",isym,ik,akmap(isym,ik)
-!  enddo
-! enddo
-!endif
-
-!if (mpi_grid_root()) then
-! do isym=1,nsymcrys
-!  write(*,*) "isym,lspl(isym):",isym,lsplsymc(isym)
-! enddo
-!endif
-
 return
 end subroutine
 
