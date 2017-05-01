@@ -95,6 +95,29 @@ call gen_gw_wmesh(1,emax,nw_se)
 ! distribute frequency along dim_q
 nwloc=mpi_grid_map(lr_nw,dim_q)
 
+<<<<<<< HEAD
+=======
+! initiate the GW.OUT file
+if (mpi_grid_root()) then
+  open(151,file="GW.OUT",form="FORMATTED",status="REPLACE")
+  call timestamp(151)
+  write(151,'("Total number of q-vectors        : ",I6)')nvq
+  write(151,'("Total number of processors       : ",I6)')nproc
+  write(151,'("MPI grid size                    : ",8I6)')&
+    &(mpi_grid_dim_size(i),i=1,mpi_grid_nd)
+  write(151,*)
+  do i=1,nvq0
+    write(151,'(" vqc : ",3G18.10)')vqc(:,i)
+  enddo
+  call flushifc(151)
+ 
+  !create folders for output files
+  call system("mkdir -p Green_func")
+  call system("mkdir -p Sig_c_files")
+  call system("mkdir -p Temp_files")
+endif
+!
+>>>>>>> 7885a5bc0a6c31ea8144f3136844870906685a8d
 ! allocate k-q mapping related arrays 
 nvqr=nkpt+nvq0-1
 allocate(iqrmap(2,nvqr))
@@ -156,7 +179,11 @@ call kq_map(iqrmap,qqnrmap,rkmap,kmap,kknrmap)
 ! find out degenencies between qpnb(1) and qpnb(2)
 call find_degenency(bndrg,evalmap,neval)
 
+<<<<<<< HEAD
 ! initiate the GW.OUT file
+=======
+! printing out variables after initialization
+>>>>>>> 7885a5bc0a6c31ea8144f3136844870906685a8d
 if (mpi_grid_root()) then
  open(151,file="GW.OUT",form="FORMATTED",status="REPLACE")
  call timestamp(151)
@@ -226,6 +253,10 @@ if (mpi_grid_root()) then
  call flushifc(151)
 endif
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 7885a5bc0a6c31ea8144f3136844870906685a8d
 ! Main loop of self-consistent GW calculation
 do iter=1,scgwni
 
