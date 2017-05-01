@@ -94,7 +94,7 @@ enddo
 call gen_gw_wmesh(1,emax,nw_se)
 ! distribute frequency along dim_q
 nwloc=mpi_grid_map(lr_nw,dim_q)
-
+!
 ! allocate k-q mapping related arrays 
 nvqr=nkpt+nvq0-1
 allocate(iqrmap(2,nvqr))
@@ -156,7 +156,6 @@ call kq_map(iqrmap,qqnrmap,rkmap,kmap,kknrmap)
 ! find out degenencies between qpnb(1) and qpnb(2)
 call find_degenency(bndrg,evalmap,neval)
 
-! initiate the GW.OUT file
 if (mpi_grid_root()) then
  open(151,file="GW.OUT",form="FORMATTED",status="REPLACE")
  call timestamp(151)
