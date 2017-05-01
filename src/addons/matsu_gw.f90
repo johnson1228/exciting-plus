@@ -11,7 +11,9 @@ implicit none
 integer :: ibnd,fbnd,iter,nvqr,iqloc,iq,exind,ierr1,ierr2,n
 integer :: ist1,ist,ik1,iqbz,irk
 integer :: i,ik,ikloc,iw,isp1
-integer :: nw_se,nwloc
+! number of energy points at which the self-energy is evaluated.
+integer :: nw_se
+integer :: nwloc
 integer :: iter0, q0, iter1
 real(8) :: diff,maxdel,maxdel_prev
 real(8) :: Zf,emin,emax
@@ -53,9 +55,10 @@ call init0
 call init1
 if (.not.mpi_grid_in()) return
 if (mpi_grid_root()) call timestamp(6,"[Matsubara time GW] done init")
-! if vq0c not used, set nvq0=8
+! nvq0 is set 0 by default
 if (nvq0.ne.1) nvq0=8
-call init_q_mesh(nvq0)   ! test
+! generate qpoints near \Gamma point.
+call init_q_mesh(nvq0) 
 call genvq
 call genvgq
 ! read the density and potentials from file
@@ -64,7 +67,35 @@ call readstate
 call genradf
 ! generate core states
 if (.not. rho_val) call gencore
+! generate wave-functions for entire BZ
+call genwfnr(151,tq0bz)
+! set Efermi=0, and find out the band energy range
+evalsvnr(:,:)=evalsvnr(:,:)-efermi
+emin=minval(evalsvnr)
+emax=maxval(evalsvnr)
+!
+!checking qpnb(1) and qpnb(2), and determine number of qp bands
+if ((qpnb(1).gt.qpnb(2)).or.(qpnb(1).le.0)) qpnb(1)=1
+if ((qpnb(2).le.0).or.(qpnb(2).gt.nstsv)) qpnb(2)=nstsv
+nbnd=qpnb(2)-qpnb(1)+1
+!
+! find out the energy range
+do isp1=1,nspinor
+ if (isp1.eq.1) then
+  bndrg(1,isp1)=qpnb(1)
+  bndrg(2,isp1)=qpnb(2)
+ elseif (isp1.eq.2) then   !spin-polarized
+  bndrg(1,isp1)=qpnb(1)+int(nstsv/2)
+  bndrg(2,isp1)=qpnb(2)+int(nstsv/2)
+ endif
+enddo
+!
+! Matsubara \tau mesh for the GW calculation
+call gen_gw_wmesh(1,emax,nw_se)
+! distribute frequency along dim_q
+nwloc=mpi_grid_map(lr_nw,dim_q)
 
+! initiate the GW.OUT file
 if (mpi_grid_root()) then
   open(151,file="GW.OUT",form="FORMATTED",status="REPLACE")
   call timestamp(151)
@@ -84,45 +115,14 @@ if (mpi_grid_root()) then
   call system("mkdir -p Temp_files")
 endif
 !
-! generate wave-functions for entire BZ
-call genwfnr(151,tq0bz)
-!
-! find out mapping from q_{IBZ} to q_{BZ}, and k1 to k2=R^{-1}*k1
+! allocate k-q mapping related arrays 
 nvqr=nkpt+nvq0-1
 allocate(iqrmap(2,nvqr))
 allocate(qqnrmap(nvq,2,nvqr))
 allocate(rkmap(48,nkptnr))
 allocate(kmap(2,nkpt))
 allocate(kknrmap(nkptnr,2,nkpt))
-call kq_map(iqrmap,qqnrmap,rkmap,kmap,kknrmap)
-!
-! set Efermi=0
-evalsvnr(:,:)=evalsvnr(:,:)-efermi
-!
-! find out the energy range
 allocate(bndrg(2,nspinor))
-emin=minval(evalsvnr)
-emax=maxval(evalsvnr)
-!checking qpnb(1) and qpnb(2)
-if ((qpnb(1).gt.qpnb(2)).or.(qpnb(1).le.0)) qpnb(1)=1
-if ((qpnb(2).le.0).or.(qpnb(2).gt.nstsv)) qpnb(2)=nstsv
-nbnd=qpnb(2)-qpnb(1)+1
-!band range
-do isp1=1,nspinor
- if (isp1.eq.1) then
-  bndrg(1,isp1)=qpnb(1)
-  bndrg(2,isp1)=qpnb(2)
- elseif (isp1.eq.2) then   !spin-polarized
-  bndrg(1,isp1)=qpnb(1)+int(nstsv/2)
-  bndrg(2,isp1)=qpnb(2)+int(nstsv/2)
- endif
-enddo
-!
-! energy mesh for the GW calculation
-call gen_gw_wmesh(1,emax,nw_se)
-! distribute frequency along dim_q
-nwloc=mpi_grid_map(lr_nw,dim_q)
-!
 ! allocate arrays for self-energies
 allocate(sig_c(nbnd,nspinor,lr_nw,nkptnrloc))
 allocate(sig_cc(nbnd,nspinor,lr_nw,nkptnrloc))
@@ -170,10 +170,13 @@ evalmap=0
 neval=0
 maxdel=0.d0
 maxdel_prev=0.d0
+!
+! find out mapping from q_{IBZ} to q_{BZ}, and k1 to k2=R^{-1}*k1
+call kq_map(iqrmap,qqnrmap,rkmap,kmap,kknrmap)
 ! find out degenencies between qpnb(1) and qpnb(2)
 call find_degenency(bndrg,evalmap,neval)
 
-! printing out variables
+! printing out variables after initialization
 if (mpi_grid_root()) then
  do isp1=1,nspinor
    write(151,'("spin component:",I1)') isp1
@@ -225,7 +228,8 @@ if (mpi_grid_root()) then
  call flushifc(151)
 endif
 
-! scGW
+
+! Main loop of self-consistent GW calculation
 do iter=1,scgwni
 
  if (mpi_grid_root()) then
